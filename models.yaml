@@ -1,0 +1,57 @@
+experiments:
+  write_csv:
+    type : csv
+    path : "../.test-data/csv/{model-name}/{dataset-name}.csv"
+    params:
+      sep : ";"
+      header : true
+      index: false
+  write_parquet:
+    type: parquet
+    path: "../.test-data/parquet/{model-name}/{dataset-name}.parquet"
+  cron_feed:
+    type: cron_feed
+    cron: 0 18 * * MON-FRI
+    dates:
+      from : '2023-01-01'
+      to : '2023-05-01'
+      count : 30
+    path: "../.test-data/feed/{dataset-name}-daily-{cron-date:%Y-%m-%d}.csv"
+    writer:
+      name : csv
+      params:
+        sep: ";"
+        header: true
+        index: false
+models:
+  - name: testmodel
+    locales: ['en-US']
+    schemas:
+      - name: dataset1
+        rows: 100
+        attributes:
+          - name : id
+            type : random_int
+            params:
+              min: 100000
+              max: 200000
+          - name : zipcode
+            type : zipcode
+          - name : full_name
+            type : name
+          - name : ssn1
+            type : ssn
+          - name : job1
+            type : job
+      - name : dataset2
+        rows :
+          min : 10
+          max : 1000
+        attributes:
+          - name : id
+            type : random_int
+          - name : ds1
+            type : ${ref}
+            params:
+              dataset: dataset1
+              attribute: id

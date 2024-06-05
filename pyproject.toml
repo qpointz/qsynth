@@ -1,0 +1,25 @@
+[project]
+name = "qsynth"
+version = "0.1.0"
+dependencies = [
+    "pandas",
+    "pathlib",
+    "faker>=18.4.0",
+    "faker_airtravel",
+    "pyyaml",
+    "croniter>=1.3.14",
+    "pyarrow",
+    "argparse",
+    "pandavro"
+]
+requires-python = ">= 3.11"
+
+#[tool.setuptools.packages.find]
+# All the following settings are optional:
+#where = ["."]  # ["."] by default
+#include = ["qsynth*"]  # ["*"] by default
+#exclude = ["tests*"]  # empty by default
+#namespaces = false  # true by default
+
+[project.scripts]
+cli-name="qsynth.main:exec_cli"
