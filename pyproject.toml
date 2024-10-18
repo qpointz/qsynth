@@ -6,13 +6,17 @@ dependencies = [
     "pathlib",
     "faker>=18.4.0",
     "faker_airtravel",
+    "faker_marketdata",
+    "faker_vehicle",
     "pyyaml",
     "croniter>=1.3.14",
     "pyarrow",
     "argparse",
-    "pandavro"
+    "pandavro",
+    "fastavro>=1.5.1,<2.0.0",
+    "numpy>=1.15.4,<2.0.0"
 ]
-requires-python = ">= 3.11"
+requires-python = ">= 3.9"
 
 #[tool.setuptools.packages.find]
 # All the following settings are optional:

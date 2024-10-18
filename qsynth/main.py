@@ -1,8 +1,10 @@
 import argparse
-import inspect
 import os.path
 import sys
+from abc import abstractmethod
 
+import fastavro
+import numpy
 import pandavro
 from croniter import croniter
 from datetime import datetime
@@ -10,6 +12,8 @@ from pandas import DataFrame
 import numbers
 from faker import Faker
 from faker_airtravel import AirTravelProvider
+from faker_marketdata import MarketDataProvider
+from faker_vehicle import VehicleProvider
 import random
 import yaml
 from pathlib import Path
@@ -21,12 +25,24 @@ from qsynth.provider import QsynthProviders
 def create_faker(**kwargs):
     faker = Faker(**kwargs)
     faker.add_provider(AirTravelProvider)
+    faker.add_provider(MarketDataProvider)
+    faker.add_provider(VehicleProvider)
     faker.add_provider(QsynthProviders)
     return faker
 
 
 class Writer:
-    def write(self, path, pd: DataFrame, writeparams={}):
+
+    @abstractmethod
+    def init_writer(self, init_path):
+        print(f"Init writer on {init_path}")
+
+    @abstractmethod
+    def finalize_writer(self):
+        print(f"Finalize writer on")
+
+    @abstractmethod
+    def write(self, path, pd: DataFrame, model_name, schema_name, model, writeparams={}):
         pass
 
     @staticmethod
@@ -39,17 +55,142 @@ class Writer:
 
 
 class CsvWriter(Writer):
-    def write(self, path, pd: DataFrame, writeparams={}):
+    def init_writer(self, init_path):
+        print(f"Init CSV writer on {init_path}")
+
+    def write(self, path, pd: DataFrame, model_name, schema_name, model, writeparams={}):
+        Writer.ensure_path(path)
         pd.to_csv(path, **writeparams)
 
 
 class ParquetWriter(Writer):
-    def write(self, path, pd: DataFrame, writeparams={}):
+    def init_writer(self, init_path):
+        print(f"Init Parquet writer on {init_path}")
+
+    def write(self, path, pd: DataFrame, model_name, schema_name, model, writeparams={}):
+        Writer.ensure_path(path)
         pd.to_parquet(path, **writeparams)
 
 class AvroWriter(Writer):
-    def write(self, path, pd: DataFrame, writeparams={}):
+    def init_writer(self, init_path):
+        print(f"Init Avro writer on {init_path}")
+
+    def write(self, path, pd: DataFrame, model_name, schema_name, model, writeparams={}):
+        Writer.ensure_path(path)
         pandavro.to_avro(path, pd, **writeparams)
+        m = fastavro.writer()
+
+class SqlWriter(Writer):
+    def __init__(self):
+        self.last_path = None
+        self.lines = []
+
+    def init_writer(self, init_path):
+        print(f"Init SQL writer on {init_path}")
+
+    @staticmethod
+    def to_sql_type(dk):
+        match dk:
+            case 'i':
+                return 'INT'
+            case 'O':
+                return 'VARCHAR'
+            case 'f':
+                return 'DECIMAL(15,4)'
+            case 'M':
+                return 'DATE'
+            case _:
+                raise Exception(f"Unknown type kind {dk}")
+
+    def _get_columns_definition(dataset_schema, pd):
+        attrs = []
+
+        for tp, x in list(zip(list(pd.dtypes), dataset_schema['attributes'])):
+            attrs.append(f"{x['name']} {SqlWriter.to_sql_type(tp.kind)} NOT NULL\n")
+        return "\t "+ "\t,".join(attrs)
+
+    def _write_insert(self, dataset_schema, pd, row):
+        attrs = ",".join([x['name'] for x in dataset_schema['attributes']])
+
+        type = [ x.kind for x in list(pd.dtypes)]
+        values = list(zip(type, list(row)))
+
+        def encode(k,o):
+            match k:
+                case 'O':
+                    return "'" + str(o).replace("'", "''") + "'"
+                case _ :
+                    return str(o)
+
+        enc = ",".join([encode(x[0],x[1]) for x in values])
+        return f"INSERT INTO {dataset_schema['name']} ({attrs}) VALUES ({enc});"
+        #list(zip(list(pd.dtypes), dataset_schema['attributes'])):
+
+
+    def write(self, path, pd: DataFrame, model_name, schema_name, model, writeparams={}):
+        self.last_path = path
+        sc = [schema for schema in model.model['schemas'] if schema['name'] == schema_name]
+        if not sc or len(sc) == 0:
+            return
+        dataset_schema = sc[0]
+        self.lines.append(f"//=========== {model_name} {schema_name} ==========")
+        self.lines.append(f"DROP TABLE IF EXISTS {schema_name};")
+
+        self.lines.append(f"CREATE TABLE {schema_name} (")
+        self.lines.append(SqlWriter._get_columns_definition(dataset_schema, pd))
+        self.lines.append(f");")
+        for index, row in pd.iterrows():
+            self.lines.append(self._write_insert(dataset_schema, pd, row))
+
+    def finalize_writer(self):
+        Writer.ensure_path(self.last_path)
+        with open(self.last_path, "w") as tf:
+            tf.write("\n".join(self.lines))
+
+
+
+class ErModelWriter(Writer):
+
+    def __init__(self):
+        self.last_path = None
+        self.refs = []
+        self.models = {}
+
+    def init_writer(self, init_path):
+        pass
+
+    def write(self, path, pd: DataFrame, model_name, schema_name, model, writeparams={}):
+        self.last_path = path
+        sc = [schema for schema in model.model['schemas'] if schema['name'] == schema_name][0]
+        names = [x['name'] for x in sc['attributes']]
+        types = [SqlWriter.to_sql_type(x.kind) for x in list(pd.dtypes)]
+        a = list(zip(names, types))
+        for at in sc['attributes']:
+            if at['type']=="${ref}":
+                self.refs.append({'p': at['params']['dataset'], 'pa':at['params']['attribute'],'c' : schema_name, 'ca': at['name'], 'cord': at['params'].get('cord', "1-*")})
+        self.models.update({schema_name:a})
+        print(a)
+
+    def finalize_writer(self):
+        Writer.ensure_path(self.last_path)
+        with (open(self.last_path, "w") as tf):
+            tf.write("@startuml\n")
+            tf.write("skinparam linetype ortho\n")
+            tf.write("left to right direction\n")
+            for k,v in self.models.items():
+                tf.write('entity "' +  k +'" {\n')
+                for a in v:
+                    tf.write(f"\t{a[0]}: {a[1]}\n")
+                tf.write("}\n")
+            for r in self.refs:
+                tf.write('"'+r['p']+'" ')
+                c = r['cord'].replace('1','||').replace('-','..').replace('*','|{')
+
+                tf.write(f" {c} ")
+                tf.write(' "'+r['c']+'"\n')
+
+            tf.write("@enduml\n")
+            tf.close()
 
 
 def get_writer(name) -> Writer:
@@ -156,7 +297,18 @@ class MultiModelsFaker:
             for index in range(1, rowstogen + 1):
                 row = [g.gen(**g.params) for g in gens]
                 rows.append(row)
+
+            dts = [numpy.array(x).dtype.name for x in rows[0]]
+            pts = [numpy.dtype(type(x)) for x in rows[0]]
+            d = {}
+            for h, t, v in zip(headers, dts, pts):
+                if str(t).startswith("str"):
+                    d.update({h:"str"})
+                else:
+                    d.update({h:t})
+
             df = pd.DataFrame(rows, columns=headers)
+            df.astype(dtype=d)
             return df
 
 
@@ -211,9 +363,7 @@ class CronFeedExperiment(Experiment):
                 for gn, g in m.generated.items():
                     p = {'model-name': mn, 'dataset-name': gn, 'cron-date': cur_date}
                     ap = Path(str(path_template).format(**p)).absolute()
-                    Writer.ensure_path(ap)
-                    writer.write(ap, g, writeparams)
-
+                    writer.write(ap, g, mn, gn, m, writeparams)
 
 class WriteExperiment:
     def __init__(self, p, models, relative_to):
@@ -229,12 +379,16 @@ class WriteExperiment:
         mmf = MultiModelsFaker(self.models)
         mmf.generate_all()
         w = self.writer()
+        init_path = (Path(self.relative_to) / str(self.path)).absolute()
+        w.init_writer(init_path)
+
         for mn, m in mmf.models.items():
             for gn, g in m.generated.items():
                 p = {'model-name': mn, 'dataset-name': gn}
                 ap = (Path(self.relative_to) / str(self.path).format(**p)).absolute()
-                Writer.ensure_path(ap)
-                w.write(ap, g, self.writeParams)
+                w.write(ap, g, mn, gn, m, self.writeParams)
+        w.finalize_writer()
+
 
     def writer(self) -> Writer:
         pass
@@ -253,6 +407,13 @@ class AvroWriteExperiment(WriteExperiment):
     def writer(self) -> Writer:
         return AvroWriter()
 
+class SqlWriteExperiment(WriteExperiment):
+    def writer(self) -> Writer:
+        return SqlWriter()
+
+class ErModelWriteExperiment(WriteExperiment):
+    def writer(self) -> Writer:
+        return ErModelWriter()
 
 class Experiments:
     def __init__(self, exps, models, relative_to=None):
@@ -286,6 +447,11 @@ class Experiments:
             if et == 'cron_feed':
                 return CronFeedExperiment(e, self.models, self.relative_to)
                 pass
+            if et == 'sql':
+                return SqlWriteExperiment(e, self.models, self.relative_to)
+                pass
+            if et == 'ermodel':
+                return ErModelWriteExperiment(e, self.models, self.relative_to)
             raise Exception(f"Unknown experiment type {et}")
 
         inst = get_by_type()

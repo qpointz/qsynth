@@ -9,6 +9,12 @@ experiments:
   write_parquet:
     type: parquet
     path: "../.test-data/parquet/{model-name}/{dataset-name}.parquet"
+  write_sql:
+    type: sql
+    path: "../.test-data/parquet/{model-name}/{dataset-name}.sql"
+  write_model:
+    type: ermodel
+    path: "../.test-data/{model-name}.puml"
   cron_feed:
     type: cron_feed
     cron: 0 18 * * MON-FRI
@@ -55,3 +61,4 @@ models:
             params:
               dataset: dataset1
               attribute: id
+              cord: "1-*"
