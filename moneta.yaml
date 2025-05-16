@@ -1,0 +1,360 @@
+experiments:
+  write_csv:
+    type : csv
+    path : "../.test-data/{model-name}/csv/{dataset-name}.csv"
+    params:
+      sep : ";"
+      header : true
+      index: false
+  write_parquet:
+    type: parquet
+    path: "../.test-data/{model-name}/parquet/{dataset-name}.parquet"
+  write_sql:
+    type: sql
+    path: "../.test-data/{model-name}/{model-name}.sql"
+  write_model:
+    type: ermodel
+    path: "../.test-data/{model-name}.puml"
+  write_model_mermaid:
+    type: mermaid
+    path: "../.test-data/{model-name}/{model-name}.mmd"
+  write_meta:
+    type: meta
+    path: "../.test-data/{model-name}/{model-name}-meta.yaml"
+  write_model_prompt:
+    type: llm-prompt
+    path: "../.test-data/{model-name}/{model-name}.prompt"
+    params:
+      prologue: You are SQL bot
+      rules:
+        - Generate **valid SQL query**
+        - quote sql identifiers with `
+        - Use **JOIN**, if requiered
+        - Determine desired output type
+        - "table: if result should be displayed as table"
+        - "text: if result should be displayed as text"
+        - "chart: if result should be displayed as chart. if chart selected as output determine chart type (bar, scatter, pie etc.)"
+        - add comment to you response
+        - add sql query confidence level  rated from 0.0 (no confidence) to 1.0 (confidence)
+        - suggest how columns to be used with selected chart data in chart_config field
+        - |
+            Reply in JSON format example:
+            {
+              "query": "sql query your generated",
+              "output_type": "desired output type",
+              "chart_type": "if output type is chart",
+              "chart_config": object describing chart configuration 
+              "comment" : "add comment if you like",
+              "confidence" : 0.4
+            }
+      epilogue: |      
+        I am your fun
+models:
+- name: moneta
+  locales:
+  - en-US
+  schemas:
+  - name: clients
+    rows: 100
+    attributes:
+    - name: client_id
+      type: random_int
+      params:
+        min: 1000000
+        max: 9999999
+      description: Unique identifier of the client.
+    - name: first_name
+      type: first_name
+      description: Client's first name.
+    - name: last_name
+      type: last_name
+      description: Client's last name.
+    - name: email
+      type: email
+      description: Client email address.
+    - name: phone
+      type: phone_number
+      description: Client contact phone number.
+    - name: created_at
+      type: date_this_decade
+      description: Date when the client was registered.
+    - name: country
+      type: country
+      description: Country of residence.
+    - name: city
+      type: city
+      description: City of residence.
+    - name: address
+      type: street_address
+      description: Street address of the client.
+    - name: segment
+      type: random_element
+      params:
+        elements:
+        - REGULAR
+        - WEALTH
+        - ULTRA
+      description: Client service segment classification.
+    description: Contains client personal and contact information.
+  - name: accounts
+    rows: 200
+    attributes:
+    - name: account_id
+      type: random_int
+      params:
+        min: 1000000
+        max: 9999999
+      description: ID of the associated bank account.
+    - name: client_id
+      type: ${ref}
+      params:
+        dataset: clients
+        attribute: client_id
+        cord: 1-*
+      description: Unique identifier of the client.
+    - name: account_type
+      type: random_element
+      params:
+        elements:
+        - checking
+        - savings
+      description: Type of bank account (e.g., checking, savings).
+    - name: balance
+      type: random_double
+      description: Current balance of the account.
+    - name: opened_at
+      type: date_this_decade
+      description: Date when the account was opened.
+    description: Represents client bank accounts and balances.
+  - name: transactions
+    rows: 500
+    attributes:
+    - name: transaction_id
+      type: random_int
+      params:
+        min: 1000000
+        max: 9999999
+      description: Unique ID of the transaction.
+    - name: account_id
+      type: ${ref}
+      params:
+        dataset: accounts
+        attribute: account_id
+      description: ID of the associated bank account.
+    - name: transaction_type
+      type: random_element
+      params:
+        elements:
+        - deposit
+        - withdrawal
+        - transfer
+      description: Type of transaction (deposit, withdrawal, transfer).
+    - name: amount
+      type: random_double
+      description: Total loan amount.
+    - name: transaction_date
+      type: date_this_year
+      description: Date of the transaction.
+    - name: description
+      type: sentence
+      description: Text description of the transaction.
+    description: Bank account transactions including deposits and withdrawals.
+  - name: loans
+    rows: 100
+    attributes:
+    - name: loan_id
+      type: random_int
+      params:
+        min: 100000
+        max: 999999
+      description: Unique ID of the loan.
+    - name: client_id
+      type: ${ref}
+      params:
+        dataset: clients
+        attribute: client_id
+      description: Unique identifier of the client.
+    - name: amount
+      type: random_double
+      description: Total loan amount.
+    - name: interest_rate
+      type: random_double
+      description: Annual interest rate of the loan.
+    - name: start_date
+      type: date_this_decade
+      description: Loan start date.
+    - name: end_date
+      type: date_this_decade
+      description: Loan end date.
+    - name: status
+      type: random_element
+      params:
+        elements:
+        - active
+        - closed
+        - defaulted
+      description: Order status (pending, executed, cancelled).
+    description: Loan contracts issued to clients with interest and duration.
+  - name: loan_payments
+    rows: 200
+    attributes:
+    - name: payment_id
+      type: random_int
+      params:
+        min: 100000
+        max: 999999
+      description: Unique ID of the loan payment.
+    - name: loan_id
+      type: ${ref}
+      params:
+        dataset: loans
+        attribute: loan_id
+      description: Unique ID of the loan.
+    - name: payment_date
+      type: date_this_year
+      description: Date of the payment.
+    - name: amount
+      type: random_double
+      description: Total loan amount.
+    description: Records payments made toward outstanding loans.
+  - name: stock_portfolios
+    rows: 150
+    attributes:
+    - name: portfolio_id
+      type: random_int
+      params:
+        min: 1000000
+        max: 9999999
+      description: Unique identifier of the portfolio.
+    - name: client_id
+      type: ${ref}
+      params:
+        dataset: clients
+        attribute: client_id
+        cord: 1-*
+      description: Unique identifier of the client.
+    - name: portfolio_name
+      type: lexify
+      params:
+        text: PORTF-?????
+        letters: ABCDEFGHIJKLMNOPQRSTUVWXYZ
+      description: Human-readable name of the portfolio.
+    - name: created_at
+      type: date_this_decade
+      description: Date when the client was registered.
+    description: Client investment portfolios containing financial assets.
+  - name: stocks
+    rows: 50
+    attributes:
+    - name: stock_id
+      type: random_int
+      params:
+        min: 1000
+        max: 9999
+      description: Unique ID of the stock.
+    - name: ticker
+      type: ticker
+      description: Stock market ticker symbol.
+    - name: company_name
+      type: company
+      description: Name of the company issuing the stock.
+    - name: sector
+      type: random_element
+      params:
+        elements:
+        - Technology
+        - Finance
+        - Healthcare
+        - Energy
+        - Retail
+      description: Industry sector of the stock.
+    - name: exchange
+      type: random_element
+      params:
+        elements:
+        - NYSE
+        - NASDAQ
+        - LSE
+        - HKEX
+      description: Stock exchange where the stock is traded.
+    description: Stock market instruments with tickers and sectors.
+  - name: stock_holdings
+    rows: 300
+    attributes:
+    - name: holding_id
+      type: random_int
+      params:
+        min: 100000
+        max: 999999
+      description: Unique ID of the holding entry.
+    - name: portfolio_id
+      type: ${ref}
+      params:
+        dataset: stock_portfolios
+        attribute: portfolio_id
+      description: Unique identifier of the portfolio.
+    - name: stock_id
+      type: ${ref}
+      params:
+        dataset: stocks
+        attribute: stock_id
+      description: Unique ID of the stock.
+    - name: shares
+      type: random_int
+      params:
+        min: 10
+        max: 1000
+      description: Number of shares held.
+    - name: average_price
+      type: random_double
+      description: Average price per share held.
+    description: Detailed records of stocks held in each portfolio.
+  - name: trade_orders
+    rows: 300
+    attributes:
+    - name: order_id
+      type: random_int
+      params:
+        min: 1000000
+        max: 9999999
+      description: Unique ID of the trade order.
+    - name: portfolio_id
+      type: ${ref}
+      params:
+        dataset: stock_portfolios
+        attribute: portfolio_id
+      description: Unique identifier of the portfolio.
+    - name: stock_id
+      type: ${ref}
+      params:
+        dataset: stocks
+        attribute: stock_id
+      description: Unique ID of the stock.
+    - name: order_type
+      type: random_element
+      params:
+        elements:
+        - buy
+        - sell
+      description: Type of order (buy or sell).
+    - name: order_date
+      type: date_this_year
+      description: Date when the order was placed.
+    - name: shares
+      type: random_int
+      params:
+        min: 10
+        max: 1000
+      description: Number of shares held.
+    - name: limit_price
+      type: random_double
+      description: Limit price for the trade order.
+    - name: status
+      type: random_element
+      params:
+        elements:
+        - pending
+        - executed
+        - cancelled
+      description: Order status (pending, executed, cancelled).
+    description: Buy and sell orders placed for stocks within portfolios.

@@ -15,6 +15,32 @@ experiments:
   write_model:
     type: ermodel
     path: "../.test-data/{model-name}.puml"
+  write_model_mermaid:
+    type: mermaid
+    path: "../.test-data/{model-name}.mmd"
+  write_model_prompt:
+    type: llm-prompt
+    path: "../.test-data/{model-name}.prompt"
+    params:
+      prologue: You are SQL bot
+      rules:
+        - Generate **valid SQL query**
+        - quote sql identifiers with `
+        - Use **JOIN**, if requiered
+        - Determine desired output type
+        - "table: if result should be displayed as table"
+        - "text: if result should be displayed as text"
+        - "chart: if result should be displayed as chart. if chart selected as output determine chart type (bar, scatter, pie etc.)"
+        - |
+            Reply in JSON format example:
+            {
+              "query": "sql query your generated",
+              "output_type": "desired output type",
+              "chart_type": "if output type is chart"
+            }
+      epilogue: |      
+        I am your fun
+
   cron_feed:
     type: cron_feed
     cron: 0 18 * * MON-FRI
@@ -35,14 +61,17 @@ models:
     schemas:
       - name: dataset1
         rows: 100
+        description: primary dataset
         attributes:
           - name : id
             type : random_int
+            description: id unique identifier
             params:
               min: 100000
               max: 200000
           - name : zipcode
             type : zipcode
+            description: location zipcode
           - name : full_name
             type : name
           - name : ssn1
