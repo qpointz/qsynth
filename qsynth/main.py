@@ -20,7 +20,7 @@ from pathlib import Path
 from collections import namedtuple
 import pandas as pd
 from qsynth.provider import QsynthProviders
-
+import re
 
 def create_faker(**kwargs):
     faker = Faker(**kwargs)
@@ -147,7 +147,155 @@ class SqlWriter(Writer):
         with open(self.last_path, "w") as tf:
             tf.write("\n".join(self.lines))
 
+def clean_type_name(s):
+    typec = r"\([^)]+\)"
+    return re.sub(typec, '', str(s).lower())
 
+class MetaDescriptorWriter(Writer):
+    def __init__(self):
+        self.last_path = None
+        self.write_params={}
+        self.tables = []
+        self.refs = []
+
+    def init_writer(self, init_path):
+        pass
+
+    def write(self, path, pd: DataFrame, model_name, schema_name, model, writeparams={}):
+        self.last_path = path
+        self.write_params.update(writeparams)
+        sc = [schema for schema in model.model['schemas'] if schema['name'] == schema_name][0]
+        names = [x['name'] for x in sc['attributes']]
+        types = [SqlWriter.to_sql_type(x.kind) for x in list(pd.dtypes)]
+        descriptions = [x.get('description') for x in sc['attributes']]
+        a = list(zip(names, types, descriptions))
+        attrs = []
+        for o in a:
+            da = {"name": o[0], "type":clean_type_name(o[1]), "description": o[2]}
+            attrs.append(da)
+        self.tables.append({"name":schema_name, "attributes" : attrs})
+
+        for at in sc['attributes']:
+            if at['type']=="${ref}":
+                self.refs.append({"parent": {"table" : at['params']['dataset'], "attribute" :at['params']['attribute'] }, 'child': {"table" : schema_name, 'attribute': at['name']}, "cardinality" : at['params'].get('cord', "1-*")})
+
+
+    def finalize_writer(self):
+        Writer.ensure_path(self.last_path)
+        fm = {"tables": self.tables, "references": self.refs}
+        with (open(self.last_path, "w") as tf):
+            yaml.dump(fm, tf, default_flow_style=False, sort_keys=False)
+
+
+class LLMPromptWriter(Writer):
+    def __init__(self):
+        self.last_path = None
+        self.refs = []
+        self.models = {}
+        self.table_descriptions ={}
+        self.write_params={}
+
+    def init_writer(self, init_path):
+        pass
+
+    def write(self, path, pd: DataFrame, model_name, schema_name, model, writeparams={}):
+        self.last_path = path
+        self.write_params.update(writeparams)
+        sc = [schema for schema in model.model['schemas'] if schema['name'] == schema_name][0]
+        names = [x['name'] for x in sc['attributes']]
+        types = [SqlWriter.to_sql_type(x.kind) for x in list(pd.dtypes)]
+        descriptions = [x.get('description') for x in sc['attributes']]
+        a = list(zip(names, types, descriptions))
+        for at in sc['attributes']:
+             if at['type']=="${ref}":
+                 self.refs.append({'p': at['params']['dataset'], 'pa':at['params']['attribute'],'c' : schema_name, 'ca': at['name'], 'cord': at['params'].get('cord', "1-*")})
+        self.models.update({schema_name:a})
+        self.table_descriptions.update({schema_name: sc.get('description')})
+        print(a)
+
+    def finalize_writer(self):
+        Writer.ensure_path(self.last_path)
+        with (open(self.last_path, "w") as tf):
+            prolog = self.write_params.get('prologue')
+            if prolog:
+                tf.write(prolog)
+            else:
+                tf.write("You are SQL bot: Use following database model")
+
+            tf.write("\nTables:\n")
+            for k,v in self.models.items():
+                tf.write('\t' + k+ ':')
+                tdesc = self.table_descriptions.get(k)
+                if tdesc:
+                    tf.write(f"- {tdesc}")
+                tf.write('\n')
+                for a in v:
+                    tf.write(f"\t\t- {a[0]}:{a[1]}")
+                    if a[2]:
+                        tf.write(f" - {a[2]}")
+                    tf.write("\n")
+                tf.write("\n")
+
+            tf.write("Relations:\n")
+            for r in self.refs:
+                tf.write('\t' + r['p']+'.'+r['pa'] +f" -({r['cord']})-" + r['c']+'.'+r['ca']+'\n')
+
+            rules = self.write_params.get('rules')
+            if (rules):
+                tf.write("\nRules:\n")
+                if (isinstance(rules, str)):
+                    tf.write(f"{rules}\n")
+                if (isinstance(rules, list)):
+                    for v in rules:
+                        formated = str(v).replace('\n', '\n\t\t ')
+                        tf.write(f"\t -{formated}\n")
+
+            epilog = self.write_params.get('epilogue')
+            if epilog:
+                tf.write(epilog)
+
+            tf.close()
+
+class ErMermaidModelWriter(Writer):
+
+    def __init__(self):
+        self.last_path = None
+        self.refs = []
+        self.models = {}
+
+    def init_writer(self, init_path):
+        pass
+
+    def write(self, path, pd: DataFrame, model_name, schema_name, model, writeparams={}):
+        self.last_path = path
+        sc = [schema for schema in model.model['schemas'] if schema['name'] == schema_name][0]
+        names = [x['name'] for x in sc['attributes']]
+        types = [SqlWriter.to_sql_type(x.kind) for x in list(pd.dtypes)]
+        a = list(zip(names, types))
+        for at in sc['attributes']:
+            if at['type']=="${ref}":
+                self.refs.append({'p': at['params']['dataset'], 'pa':at['params']['attribute'],'c' : schema_name, 'ca': at['name'], 'cord': at['params'].get('cord', "1-*")})
+        self.models.update({schema_name:a})
+        print(a)
+
+    def finalize_writer(self):
+
+        Writer.ensure_path(self.last_path)
+        with (open(self.last_path, "w") as tf):
+            tf.write("erDiagram\n")
+            for k,v in self.models.items():
+                tf.write(k +' {\n')
+                for a in v:
+                    typename = clean_type_name(a[1])
+                    tf.write(f"\t{typename} {a[0]}\n")
+                tf.write("}\n")
+            for r in self.refs:
+                tf.write(''+r['p']+' ')
+                c = r['cord'].replace('1','||').replace('-','--').replace('*','o{')
+
+                tf.write(f" {c}")
+                tf.write(' '+r['c']+':has\n')
+            tf.close()
 
 class ErModelWriter(Writer):
 
@@ -191,6 +339,7 @@ class ErModelWriter(Writer):
 
             tf.write("@enduml\n")
             tf.close()
+
 
 
 def get_writer(name) -> Writer:
@@ -415,6 +564,19 @@ class ErModelWriteExperiment(WriteExperiment):
     def writer(self) -> Writer:
         return ErModelWriter()
 
+class ErMermaidModelWriteExperiment(WriteExperiment):
+    def writer(self) -> Writer:
+        return ErMermaidModelWriter()
+
+class LLMPromptWriteExperiment(WriteExperiment):
+    def writer(self) -> Writer:
+        return LLMPromptWriter()
+
+class MetaDescriptorExperiment(WriteExperiment):
+    def writer(self) -> Writer:
+        return MetaDescriptorWriter()
+
+
 class Experiments:
     def __init__(self, exps, models, relative_to=None):
         self.models = models
@@ -450,8 +612,16 @@ class Experiments:
             if et == 'sql':
                 return SqlWriteExperiment(e, self.models, self.relative_to)
                 pass
-            if et == 'ermodel':
+            if et == 'ermodel' or et=='plantuml':
                 return ErModelWriteExperiment(e, self.models, self.relative_to)
+            if et == 'mermaid':
+                return ErMermaidModelWriteExperiment(e, self.models, self.relative_to)
+            if et == 'llm-prompt':
+                return LLMPromptWriteExperiment(e, self.models, self.relative_to)
+            if et == 'meta':
+                return MetaDescriptorExperiment(e, self.models, self.relative_to)
+
+
             raise Exception(f"Unknown experiment type {et}")
 
         inst = get_by_type()
