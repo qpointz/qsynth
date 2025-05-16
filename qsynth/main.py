@@ -157,12 +157,14 @@ class MetaDescriptorWriter(Writer):
         self.write_params={}
         self.tables = []
         self.refs = []
+        self.model_name = ""
 
     def init_writer(self, init_path):
         pass
 
     def write(self, path, pd: DataFrame, model_name, schema_name, model, writeparams={}):
         self.last_path = path
+        self.model_name = model_name
         self.write_params.update(writeparams)
         sc = [schema for schema in model.model['schemas'] if schema['name'] == schema_name][0]
         names = [x['name'] for x in sc['attributes']]
@@ -182,7 +184,7 @@ class MetaDescriptorWriter(Writer):
 
     def finalize_writer(self):
         Writer.ensure_path(self.last_path)
-        fm = {"tables": self.tables, "references": self.refs}
+        fm = {"schemas" : [{"name": self.model_name, "tables": self.tables, "references": self.refs}] }
         with (open(self.last_path, "w") as tf):
             yaml.dump(fm, tf, default_flow_style=False, sort_keys=False)
 
