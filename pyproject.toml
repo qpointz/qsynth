@@ -1,6 +1,30 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "qsynth"
 version = "0.1.0"
+description = "Synthetic data generation tool that creates realistic, relational datasets from declarative YAML models"
+readme = "README.md"
+requires-python = ">= 3.9"
+license = {text = "MIT"}  # Update with your actual license
+authors = [
+    {name = "Your Name", email = "your.email@example.com"}  # Update with actual author info
+]
+keywords = ["synthetic-data", "data-generation", "faker", "yaml", "testing"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Testing",
+    "Topic :: Database",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
 dependencies = [
     "pandas",
     "faker>=18.4.0",
@@ -15,16 +39,17 @@ dependencies = [
     "numpy>=1.15.4,<2.0.0",
     "pydantic>=2.0.0",
     "pytest",
-    "rich>=13.0.0"
+    "rich>=13.0.0",
+    "prompt_toolkit>=3.0.0"
 ]
-requires-python = ">= 3.9"
-
-#[tool.setuptools.packages.find]
-# All the following settings are optional:
-#where = ["."]  # ["."] by default
-#include = ["qsynth*"]  # ["*"] by default
-#exclude = ["tests*"]  # empty by default
-#namespaces = false  # true by default
 
 [project.scripts]
-cli-name="qsynth.main:exec_cli"
+qsynth = "qsynth.cli:exec_cli"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["qsynth*"]
+exclude = ["tests*", "*.tests*", "*.tests", "test_*"]
+
+[tool.setuptools.package-data]
+qsynth = ["py.typed"]  # If you add type stubs later
