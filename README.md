@@ -10,7 +10,11 @@
 - [Quick Start](#quick-start)
 - [CLI Usage](#cli-usage)
   - [List Available Faker Providers](#list-available-faker-providers)
+  - [Show Type Information](#show-type-information)
+  - [Show Schema Information](#show-schema-information)
+  - [Preview Generated Data](#preview-generated-data)
   - [Run Experiments](#run-experiments)
+  - [Interactive REPL Shell](#interactive-repl-shell)
   - [Using Docker](#using-docker)
 - [Model File Format](#model-file-format)
   - [Basic Structure](#basic-structure)
@@ -49,6 +53,8 @@ Qsynth solves the problem of creating realistic test data with proper relational
 - 🎲 **Rich Data Types**: Built on [Faker](https://github.com/joke2k/faker) with extensions for financial, aviation, vehicle data
 - 🔗 **Relationship Modeling**: Define foreign keys and cardinalities declaratively
 - 📊 **Multiple Outputs**: CSV, Parquet, Avro, SQL DDL, ER diagrams, metadata YAML, LLM prompts
+- 🖥️ **Interactive Shell**: REPL for exploring models and previewing data
+- 📋 **Data Preview**: View generated data in beautiful tables before writing to disk
 - ⏰ **Cron Schedules**: Generate time-series data with configurable date ranges
 - 🔧 **Extensible**: Easy to add new experiment types and writer formats
 - ✅ **Type-Safe**: Pydantic validation ensures your models are well-formed
@@ -137,6 +143,120 @@ Search for specific providers:
 python -m qsynth types --find random
 ```
 
+### Show Type Information
+
+Get detailed information about a specific type, including its parameters:
+
+```bash
+python -m qsynth show-type first_name
+```
+
+For types with parameters:
+
+```bash
+python -m qsynth show-type random_int
+```
+
+For the special reference type:
+
+```bash
+python -m qsynth show-type '${ref}'
+```
+
+This command displays:
+- **Parameters**: Required and optional parameters with default values
+- **Sample Output**: An example of generated data
+- **Documentation**: Usage instructions and examples
+
+### Show Schema Information
+
+Explore and display schema information from YAML model files. The `schema` command has three modes:
+
+#### List Overview (Default)
+
+When no filters are specified, it lists all models, schemas, and experiments:
+
+```bash
+python -m qsynth schema model.yaml
+```
+
+This shows:
+- All experiments with their types
+- All models with schema counts
+- All schemas with row counts
+
+#### Detailed Schema Information
+
+Filter by a specific model:
+
+```bash
+python -m qsynth schema model.yaml --model moneta
+```
+
+Filter by a specific schema within a model:
+
+```bash
+python -m qsynth schema model.yaml --model moneta --schema clients
+```
+
+This command displays:
+- **Model Overview**: Model name, locales, and schema count in a formatted panel
+- **Schema Details**: Each schema with its row count and description
+- **Attribute Tables**: All attributes with their types, parameters, and descriptions
+- **Rich Formatting**: Color-coded, easy-to-read output using the `rich` library
+
+The output shows:
+- Reference attributes (`${ref}`) with their target relationships
+- Parameters for numeric types (min/max ranges)
+- Random element choices
+- All other configuration details
+
+#### Describe Experiments
+
+Show detailed experiment configurations:
+
+```bash
+python -m qsynth schema model.yaml --experiments
+```
+
+This displays:
+- Experiment types and output paths
+- All parameters and configuration options
+- Special settings for different experiment types (e.g., cron schedules for `cron_feed`)
+
+### Preview Generated Data
+
+Preview generated data in a beautiful table format without running experiments:
+
+```bash
+python -m qsynth preview model.yaml
+```
+
+This generates a sample of data and displays it in a Rich table format.
+
+Filter by a specific model:
+
+```bash
+python -m qsynth preview model.yaml --model moneta
+```
+
+Filter by a specific schema:
+
+```bash
+python -m qsynth preview model.yaml --model moneta --schema clients
+```
+
+Adjust the number of rows displayed:
+
+```bash
+python -m qsynth preview model.yaml --rows 20
+```
+
+This command is useful for:
+- **Quick prototyping** - See sample data before generating files
+- **Debugging models** - Verify that your model generates expected data
+- **Documentation** - Generate sample outputs for presentations
+
 ### Run Experiments
 
 Run all experiments defined in a YAML file:
@@ -150,6 +270,80 @@ Or run specific experiments:
 ```bash
 python -m qsynth run --input-file model.yaml --experiment write_csv write_parquet
 ```
+
+### Interactive REPL Shell
+
+Qsynth includes an interactive REPL shell for exploring and working with your models:
+
+```bash
+python -m qsynth shell model.yaml
+```
+
+This launches an interactive shell where you can:
+
+**Information Commands:**
+- `help` - Show available commands
+- `list` or `ls` - List all models, schemas, and experiments
+- `models` - Show all models
+- `schemas [model_name]` - Show schemas (optionally filtered by model)
+- `experiments` or `exps` - Show all experiments
+- `describe model <name>` - Describe a specific model
+- `describe schema <name>` - Describe a specific schema
+- `describe experiments` - Show detailed experiment configurations
+
+**Operation Commands:**
+- `run` - Run all experiments
+- `run <experiment1> <experiment2>` - Run specific experiments
+- `preview` - Preview all generated data
+- `preview <model>` - Preview data from a specific model
+- `preview <model> <schema>` - Preview a specific schema
+- `preview --rows 20` - Preview with specified number of rows (default: 10)
+- `types --all` - List all Faker provider types
+- `types --find <pattern>` - Search for types matching a pattern
+- `info <type>` - Show detailed information about a Faker type
+
+**Utility Commands:**
+- `clear` - Clear the screen
+- `exit` or `quit` - Exit the shell
+
+**Example Session:**
+
+```bash
+qsynth> list
+# Shows overview of all models, schemas, and experiments
+
+qsynth> models
+# Lists all models with their schemas
+
+qsynth> schemas moneta
+# Shows schemas in the 'moneta' model
+
+qsynth> describe model moneta
+# Detailed view of the moneta model
+
+qsynth> preview
+# Preview all generated data in table format
+
+qsynth> preview moneta
+# Preview data from 'moneta' model
+
+qsynth> preview moneta clients
+# Preview 'clients' schema from 'moneta' model
+
+qsynth> preview --rows 20
+# Preview with 20 rows per table
+
+qsynth> run write_csv
+# Run the write_csv experiment
+
+qsynth> info random_int
+# Show details about the random_int type
+
+qsynth> exit
+# Goodbye!
+```
+
+The REPL shell provides a convenient way to explore your data models and run experiments interactively without typing the full command-line each time.
 
 ### Using Docker
 

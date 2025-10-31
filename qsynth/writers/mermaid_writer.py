@@ -2,7 +2,6 @@ from pandas import DataFrame
 
 from qsynth.writers.base import Writer
 from qsynth.writers import register_writer
-from qsynth.main import clean_type_name
 
 
 @register_writer('mermaid')
@@ -34,7 +33,7 @@ class ErMermaidModelWriter(Writer):
             for k,v in self.models.items():
                 tf.write(k +' {\n')
                 for a in v:
-                    typename = clean_type_name(a[1])
+                    typename = Writer.clean_type_name(a[1])
                     tf.write(f"\t{typename} {a[0]}\n")
                 tf.write("}\n")
             for r in self.refs:
