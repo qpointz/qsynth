@@ -28,6 +28,12 @@ def argument_parser():
     shell = subparsers.add_parser('shell', help='Start interactive REPL shell with a YAML file')
     shell.add_argument('yaml_file', metavar='YAML_FILE', help='Path to the YAML model file')
 
+    preview = subparsers.add_parser('preview', help='Preview generated data in a table format')
+    preview.add_argument('yaml_file', metavar='YAML_FILE', help='Path to the YAML model file')
+    preview.add_argument('--model', '-m', metavar='MODEL_NAME', help='Filter by specific model name')
+    preview.add_argument('--schema', '-s', metavar='SCHEMA_NAME', help='Filter by specific schema name')
+    preview.add_argument('--rows', '-r', type=int, default=10, help='Number of rows to display (default: 10)')
+
     return argp
 
 
@@ -84,6 +90,11 @@ def exec_shell(args):
     repl.run()
 
 
+def exec_preview(args):
+    """Preview generated data."""
+    _main.preview_data(args.yaml_file, model_name=args.model, schema_name=args.schema, rows=args.rows)
+
+
 def exec_cli():
     parsed = argument_parser().parse_args()
     if parsed.command == 'types':
@@ -96,6 +107,8 @@ def exec_cli():
         exec_show_schema(parsed)
     elif parsed.command == 'shell':
         exec_shell(parsed)
+    elif parsed.command == 'preview':
+        exec_preview(parsed)
     else:
         raise Exception(f"Unknown subcommand:{parsed.command}")
 

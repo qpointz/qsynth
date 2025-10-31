@@ -112,6 +112,9 @@ class QsynthRepl:
         elif cmd_lower == 'info':
             self._cmd_info(console, args)
         
+        elif cmd_lower == 'preview':
+            self._cmd_preview(console, args)
+        
         elif cmd_lower == 'clear':
             import os
             os.system('cls' if os.name == 'nt' else 'clear')
@@ -138,6 +141,7 @@ class QsynthRepl:
   
 [bold]Operations:[/bold]
   run               - Run experiments (all or specific)
+  preview           - Preview generated data in a table
   types             - List or search for Faker provider types
   info <type>       - Show detailed information about a Faker type
   
@@ -151,6 +155,10 @@ class QsynthRepl:
   schemas moneta              - Show schemas in 'moneta' model
   describe model moneta       - Describe the 'moneta' model
   describe schema clients     - Describe the 'clients' schema
+  preview                     - Preview all generated data
+  preview moneta              - Preview data from 'moneta' model
+  preview moneta clients      - Preview 'clients' schema from 'moneta' model
+  preview --rows 20           - Preview with 20 rows per table
   run                         - Run all experiments
   run write_csv               - Run specific experiment
   types --all                 - List all Faker types
@@ -275,4 +283,38 @@ class QsynthRepl:
         
         type_name = args[0]
         _main.show_type_info(type_name)
+    
+    def _cmd_preview(self, console, args):
+        """Preview generated data."""
+        # Parse args for model, schema, and rows
+        model_name = None
+        schema_name = None
+        rows = 10
+        
+        i = 0
+        while i < len(args):
+            if args[i] == '--rows' and i + 1 < len(args):
+                try:
+                    rows = int(args[i + 1])
+                    i += 2
+                except ValueError:
+                    console.print("[bold red]Error:[/bold red] --rows must be an integer\n")
+                    return
+            elif args[i] == '-r' and i + 1 < len(args):
+                try:
+                    rows = int(args[i + 1])
+                    i += 2
+                except ValueError:
+                    console.print("[bold red]Error:[/bold red] -r must be an integer\n")
+                    return
+            elif not model_name:
+                model_name = args[i]
+                i += 1
+            elif not schema_name:
+                schema_name = args[i]
+                i += 1
+            else:
+                i += 1
+        
+        _main.preview_data(str(self.yaml_file), model_name=model_name, schema_name=schema_name, rows=rows)
 

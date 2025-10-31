@@ -171,3 +171,73 @@ def test_repl_execute_list_aliases(capsys):
     # Should work without errors
     assert True
 
+
+def test_repl_cmd_preview(tmp_path, capsys):
+    """Test preview command."""
+    yaml_content = """
+models:
+  - name: testmodel
+    locales: ['en-US']
+    schemas:
+      - name: dataset1
+        rows: 10
+        attributes:
+          - name: id
+            type: random_int
+            params:
+              min: 1
+              max: 100
+          - name: name
+            type: name
+
+experiments: {}
+"""
+    yaml_file = tmp_path / "test_preview.yaml"
+    yaml_file.write_text(yaml_content)
+    
+    repl = QsynthRepl(str(yaml_file))
+    console = MagicMock()
+    
+    # Test preview with no args
+    repl._cmd_preview(console, [])
+    out, err = capsys.readouterr()
+    assert len(out) > 0  # Check that output was produced
+    
+    # Test preview with model filter
+    repl._cmd_preview(console, ['testmodel'])
+    out, err = capsys.readouterr()
+    assert len(out) > 0
+    
+    # Test preview with rows
+    repl._cmd_preview(console, ['--rows', '5'])
+    out, err = capsys.readouterr()
+    assert len(out) > 0
+
+
+def test_repl_cmd_preview_invalid_rows(tmp_path):
+    """Test preview command with invalid rows argument."""
+    yaml_content = """
+models:
+  - name: testmodel
+    locales: ['en-US']
+    schemas:
+      - name: dataset1
+        rows: 10
+        attributes:
+          - name: id
+            type: random_int
+
+experiments: {}
+"""
+    yaml_file = tmp_path / "test_preview_invalid.yaml"
+    yaml_file.write_text(yaml_content)
+    
+    repl = QsynthRepl(str(yaml_file))
+    console = MagicMock()
+    
+    # Test with invalid rows value
+    repl._cmd_preview(console, ['--rows', 'invalid'])
+    
+    # Should print an error message
+    assert console.print.call_count > 0
+

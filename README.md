@@ -12,6 +12,7 @@
   - [List Available Faker Providers](#list-available-faker-providers)
   - [Show Type Information](#show-type-information)
   - [Show Schema Information](#show-schema-information)
+  - [Preview Generated Data](#preview-generated-data)
   - [Run Experiments](#run-experiments)
   - [Interactive REPL Shell](#interactive-repl-shell)
   - [Using Docker](#using-docker)
@@ -52,6 +53,8 @@ Qsynth solves the problem of creating realistic test data with proper relational
 - 🎲 **Rich Data Types**: Built on [Faker](https://github.com/joke2k/faker) with extensions for financial, aviation, vehicle data
 - 🔗 **Relationship Modeling**: Define foreign keys and cardinalities declaratively
 - 📊 **Multiple Outputs**: CSV, Parquet, Avro, SQL DDL, ER diagrams, metadata YAML, LLM prompts
+- 🖥️ **Interactive Shell**: REPL for exploring models and previewing data
+- 📋 **Data Preview**: View generated data in beautiful tables before writing to disk
 - ⏰ **Cron Schedules**: Generate time-series data with configurable date ranges
 - 🔧 **Extensible**: Easy to add new experiment types and writer formats
 - ✅ **Type-Safe**: Pydantic validation ensures your models are well-formed
@@ -221,6 +224,39 @@ This displays:
 - All parameters and configuration options
 - Special settings for different experiment types (e.g., cron schedules for `cron_feed`)
 
+### Preview Generated Data
+
+Preview generated data in a beautiful table format without running experiments:
+
+```bash
+python -m qsynth preview model.yaml
+```
+
+This generates a sample of data and displays it in a Rich table format.
+
+Filter by a specific model:
+
+```bash
+python -m qsynth preview model.yaml --model moneta
+```
+
+Filter by a specific schema:
+
+```bash
+python -m qsynth preview model.yaml --model moneta --schema clients
+```
+
+Adjust the number of rows displayed:
+
+```bash
+python -m qsynth preview model.yaml --rows 20
+```
+
+This command is useful for:
+- **Quick prototyping** - See sample data before generating files
+- **Debugging models** - Verify that your model generates expected data
+- **Documentation** - Generate sample outputs for presentations
+
 ### Run Experiments
 
 Run all experiments defined in a YAML file:
@@ -258,6 +294,10 @@ This launches an interactive shell where you can:
 **Operation Commands:**
 - `run` - Run all experiments
 - `run <experiment1> <experiment2>` - Run specific experiments
+- `preview` - Preview all generated data
+- `preview <model>` - Preview data from a specific model
+- `preview <model> <schema>` - Preview a specific schema
+- `preview --rows 20` - Preview with specified number of rows (default: 10)
 - `types --all` - List all Faker provider types
 - `types --find <pattern>` - Search for types matching a pattern
 - `info <type>` - Show detailed information about a Faker type
@@ -280,6 +320,18 @@ qsynth> schemas moneta
 
 qsynth> describe model moneta
 # Detailed view of the moneta model
+
+qsynth> preview
+# Preview all generated data in table format
+
+qsynth> preview moneta
+# Preview data from 'moneta' model
+
+qsynth> preview moneta clients
+# Preview 'clients' schema from 'moneta' model
+
+qsynth> preview --rows 20
+# Preview with 20 rows per table
 
 qsynth> run write_csv
 # Run the write_csv experiment

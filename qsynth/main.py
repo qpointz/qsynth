@@ -465,6 +465,89 @@ def list_schema_content(yaml_file, mp):
         console.print("[dim]No models defined[/dim]\n")
 
 
+def preview_data(yaml_file, model_name=None, schema_name=None, rows=10):
+    """Preview generated data in a table format."""
+    try:
+        # Load and parse YAML file
+        with open(yaml_file, 'r') as yamlstream:
+            mp = yaml.safe_load(yamlstream)
+        
+        if 'models' not in mp:
+            console.print(f"\n[bold red]Error:[/bold red] No 'models' section found in YAML file.")
+            return
+        
+        # Parse models
+        models = [Model(**m) for m in mp['models']]
+        
+        # Filter by model name if specified
+        if model_name:
+            models = [m for m in models if m.name == model_name]
+            if not models:
+                console.print(f"\n[bold red]Error:[/bold red] Model '[yellow]{model_name}[/yellow]' not found in YAML file.")
+                return
+        
+        # Generate data
+        mmf = MultiModelsFaker(models)
+        mmf.generate_all()
+        
+        console.print(f"\n[bold cyan]Generated Data Preview:[/bold cyan] [yellow]{yaml_file}[/yellow]\n")
+        
+        # Display each model's generated data
+        for model in models:
+            model_faker = mmf.models[model.name]
+            
+            # Display model header
+            console.print(Panel(
+                f"[bold]Model:[/bold] {model.name}",
+                title="[cyan]Data Preview[/cyan]",
+                border_style="cyan"
+            ))
+            console.print()
+            
+            # Display each schema's data
+            for schema in model.schemas:
+                # Filter by schema name if specified
+                if schema_name and schema.name != schema_name:
+                    continue
+                
+                if schema.name not in model_faker.generated:
+                    continue
+                
+                df = model_faker.generated[schema.name]
+                
+                # Limit rows for preview
+                preview_df = df.head(min(rows, len(df)))
+                
+                # Display schema info
+                console.print(f"[bold green]Schema: {schema.name}[/bold green] ({len(df)} total rows, showing {len(preview_df)})")
+                console.print()
+                
+                # Create table
+                table = Table(show_header=True, header_style="bold magenta", box=None)
+                
+                # Add columns
+                for col in df.columns:
+                    table.add_column(col, style="cyan", no_wrap=False, overflow="fold")
+                
+                # Add rows
+                for _, row in preview_df.iterrows():
+                    table.add_row(*[str(val) for val in row])
+                
+                console.print(table)
+                console.print()
+                
+                # If we filtered to a specific schema, we can stop
+                if schema_name:
+                    break
+        
+    except FileNotFoundError:
+        console.print(f"\n[bold red]Error:[/bold red] File '[yellow]{yaml_file}[/yellow]' not found.")
+    except yaml.YAMLError as e:
+        console.print(f"\n[bold red]Error parsing YAML:[/bold red] {e}")
+    except Exception as e:
+        console.print(f"\n[bold red]Error:[/bold red] {e}")
+
+
 def describe_experiments(yaml_file):
     """Describe experiments configuration from a YAML file."""
     try:
@@ -550,6 +633,12 @@ def argument_parser():
     shell = subparsers.add_parser('shell', help='Start interactive REPL shell with a YAML file')
     shell.add_argument('yaml_file', metavar='YAML_FILE', help='Path to the YAML model file')
 
+    preview = subparsers.add_parser('preview', help='Preview generated data in a table format')
+    preview.add_argument('yaml_file', metavar='YAML_FILE', help='Path to the YAML model file')
+    preview.add_argument('--model', '-m', metavar='MODEL_NAME', help='Filter by specific model name')
+    preview.add_argument('--schema', '-s', metavar='SCHEMA_NAME', help='Filter by specific schema name')
+    preview.add_argument('--rows', '-r', type=int, default=10, help='Number of rows to display (default: 10)')
+
     return argp
 
 
@@ -605,6 +694,11 @@ def exec_shell(args):
     repl.run()
 
 
+def exec_preview(args):
+    """Preview generated data."""
+    preview_data(args.yaml_file, model_name=args.model, schema_name=args.schema, rows=args.rows)
+
+
 def exec_cli():
     parsed = argument_parser().parse_args()
     if parsed.command == 'types':
@@ -617,6 +711,8 @@ def exec_cli():
         exec_show_schema(parsed)
     elif parsed.command == 'shell':
         exec_shell(parsed)
+    elif parsed.command == 'preview':
+        exec_preview(parsed)
     else:
         raise Exception(f"Unknown subcommand:{parsed.command}")
 
