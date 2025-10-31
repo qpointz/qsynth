@@ -53,7 +53,7 @@ Qsynth solves the problem of creating realistic test data with proper relational
 - 🎲 **Rich Data Types**: Built on [Faker](https://github.com/joke2k/faker) with extensions for financial, aviation, vehicle data
 - 🔗 **Relationship Modeling**: Define foreign keys and cardinalities declaratively
 - 📊 **Multiple Outputs**: CSV, Parquet, Avro, SQL DDL, ER diagrams, metadata YAML, LLM prompts
-- 🖥️ **Interactive Shell**: REPL for exploring models and previewing data
+- 🖥️ **Interactive Shell**: REPL with auto-completion, incremental search, and interactive type testing
 - 📋 **Data Preview**: View generated data in beautiful tables before writing to disk
 - ⏰ **Cron Schedules**: Generate time-series data with configurable date ranges
 - 🔧 **Extensible**: Easy to add new experiment types and writer formats
@@ -61,9 +61,20 @@ Qsynth solves the problem of creating realistic test data with proper relational
 
 ## Installation
 
+**Requirements:**
+- Python 3.9 or higher
+
+**Install from source:**
+
 ```bash
 pip install -e .
 ```
+
+This will install all dependencies including:
+- Core libraries: `pandas`, `pydantic`, `faker`, `pyyaml`
+- Output formats: `pyarrow`, `pandavro`, `fastavro`
+- Interactive features: `prompt_toolkit` (for REPL auto-completion), `rich` (for formatted output)
+- Testing: `pytest`
 
 Or using Docker:
 
@@ -129,7 +140,29 @@ python -m qsynth run --input-file model.yaml --run-all-experiments
 
 ## CLI Usage
 
-Qsynth provides a simple command-line interface:
+Qsynth provides a simple command-line interface with the following commands:
+
+| Command | Description |
+|---------|-------------|
+| `types` | List available Faker provider types |
+| `show-type <type>` | Show detailed information about a specific type |
+| `schema <file>` | Show schema information from YAML file |
+| `preview <file>` | Preview generated data without writing files |
+| `run --input-file <file>` | Run experiments to generate data files |
+| `shell <file>` | Launch interactive REPL shell |
+
+**Command-line options:**
+- `types --all` - List all Faker provider types
+- `types --find <pattern>` - Search for types matching a pattern
+- `schema <file> --model <name>` or `-m <name>` - Filter by model name
+- `schema <file> --schema <name>` or `-s <name>` - Filter by schema name
+- `schema <file> --experiments` - Show experiment configurations
+- `preview <file> --model <name>` or `-m <name>` - Filter preview by model
+- `preview <file> --schema <name>` or `-s <name>` - Filter preview by schema
+- `preview <file> --rows <n>` or `-r <n>` - Number of rows to display (default: 10)
+- `run --input-file <file>` or `-i <file>` - Input YAML file (required)
+- `run --run-all-experiments` or `-a` - Run all experiments
+- `run --experiment <name>...` or `-e <name>...` - Run specific experiments
 
 ### List Available Faker Providers
 
@@ -167,6 +200,41 @@ This command displays:
 - **Parameters**: Required and optional parameters with default values
 - **Sample Output**: An example of generated data
 - **Documentation**: Usage instructions and examples
+
+### Test Faker Types (REPL Shell Only)
+
+In the REPL shell, use the `test` command to interactively test Faker types:
+
+```bash
+qsynth> test random_int
+Testing type: random_int
+
+Parameters:
+min (int) *required*
+  Enter min: 1
+max (int) *required*
+  Enter max: 100
+
+Generating 10 sample values...
+
+#    Value
+1    42
+2    67
+3    23
+...
+```
+
+**Features:**
+- **Interactive parameter input**: Prompts for each parameter with validation
+- **Default value support**: Optional parameters show defaults; press Enter to accept
+- **Type conversion**: Automatically converts input to appropriate types (int, float, bool, str)
+- **Sample generation**: Generates 10 values with your parameters in a formatted table
+- **Error handling**: Validates input and provides helpful error messages
+
+This is particularly useful for:
+- **Exploring new types**: See what values a type generates before adding it to your model
+- **Parameter testing**: Experiment with different parameter combinations
+- **Quick prototyping**: Generate sample data without editing YAML files
 
 ### Show Schema Information
 
@@ -279,6 +347,11 @@ Qsynth includes an interactive REPL shell for exploring and working with your mo
 python -m qsynth shell model.yaml
 ```
 
+**Features:**
+- 🔍 **Auto-completion with incremental search** - Press Tab or type to see suggestions filtered in real-time
+- ⌨️ **Smart filtering** - Prefix and substring matching with priority sorting
+- 📝 **Command history** - Use arrow keys to navigate previous commands
+
 This launches an interactive shell where you can:
 
 **Information Commands:**
@@ -301,6 +374,7 @@ This launches an interactive shell where you can:
 - `types --all` - List all Faker provider types
 - `types --find <pattern>` - Search for types matching a pattern
 - `info <type>` - Show detailed information about a Faker type
+- `test <type>` - Test a Faker type interactively with custom parameters and generate 10 sample values
 
 **Utility Commands:**
 - `clear` - Clear the screen
@@ -339,9 +413,30 @@ qsynth> run write_csv
 qsynth> info random_int
 # Show details about the random_int type
 
+qsynth> test random_int
+# Interactive test of random_int type:
+#   - Prompts for required parameters (min, max)
+#   - Shows optional parameters with defaults
+#   - Generates 10 sample values
+
 qsynth> exit
 # Goodbye!
 ```
+
+#### Auto-Completion Features
+
+The REPL shell includes intelligent auto-completion that supports:
+
+- **Incremental search**: Suggestions appear as you type
+- **Smart filtering**: Case-insensitive matching with both prefix and substring support
+- **Priority sorting**: Prefix matches appear first, followed by substring matches
+- **Context-aware**: Completion suggestions change based on the command and current argument position
+
+**Completion Examples:**
+- Type `run ` and press Tab to see all available experiments
+- Type `test ran` to see Faker types matching "ran" (e.g., `random_int`, `random_double`)
+- Type `preview ` to see model names, or `preview <model> ` to see schema names
+- Type `describe ` to see available options (model, schema, experiments)
 
 The REPL shell provides a convenient way to explore your data models and run experiments interactively without typing the full command-line each time.
 
@@ -513,9 +608,11 @@ Generate PlantUML ER diagram:
 
 ```yaml
 write_model:
-  type: ermodel  # or 'plantuml'
+  type: ermodel   # or use 'plantuml' as alias
   path: "./data/{model-name}.puml"
 ```
+
+**Note:** Both `ermodel` and `plantuml` are valid experiment types that produce the same PlantUML output.
 
 ### Mermaid Experiment
 
@@ -578,7 +675,21 @@ This generates files for each occurrence of the cron pattern between dates.
 
 ## Using as a Library
 
-Qsynth can be used programmatically in your Python applications:
+Qsynth can be used programmatically in your Python applications. The public API is available from the main package:
+
+```python
+from qsynth import (
+    # Core models
+    Model, Schema, Attribute, RowSpec,
+    # Data generation
+    MultiModelsFaker, Experiments,
+    # Registry functions
+    get_experiment_class, register_experiment,
+    get_writer, register_writer
+)
+```
+
+**Example usage:**
 
 ```python
 from qsynth import Model, Schema, Attribute, Experiments
@@ -659,22 +770,50 @@ See the included example files:
 ```
 qsynth/
 ├── qsynth/
-│   ├── __init__.py
-│   ├── main.py              # Core generation logic
-│   ├── cli.py               # Command-line interface
-│   ├── models.py            # Pydantic model definitions
-│   ├── provider.py          # Custom Faker providers
-│   ├── experiments/         # Experiment types
+│   ├── __init__.py          # Public API exports
+│   ├── __main__.py          # Entry point for python -m qsynth
+│   ├── main.py              # Core generation logic (MultiModelsFaker, Experiments)
+│   ├── cli.py               # Command-line interface and argument parsing
+│   ├── models.py            # Pydantic model definitions (Model, Schema, Attribute)
+│   ├── provider.py          # Custom Faker providers (QsynthProviders)
+│   ├── repl.py              # Interactive REPL shell with auto-completion
+│   ├── experiments/         # Experiment type modules
+│   │   ├── __init__.py      # Experiment registry
+│   │   ├── base.py          # Abstract base class
+│   │   ├── write_experiment.py # Base for file-writing experiments
 │   │   ├── csv_experiment.py
 │   │   ├── parquet_experiment.py
+│   │   ├── avro_experiment.py
 │   │   ├── sql_experiment.py
-│   │   └── ...
-│   ├── writers/             # Output writers
+│   │   ├── ermodel_experiment.py
+│   │   ├── mermaid_experiment.py
+│   │   ├── meta_experiment.py
+│   │   ├── llm_prompt_experiment.py
+│   │   └── cron_feed_experiment.py
+│   ├── writers/             # Output format modules
+│   │   ├── __init__.py      # Writer registry
+│   │   ├── base.py          # Abstract base class
 │   │   ├── csv_writer.py
 │   │   ├── parquet_writer.py
-│   │   └── ...
+│   │   ├── avro_writer.py
+│   │   ├── sql_writer.py
+│   │   ├── ermodel_writer.py
+│   │   ├── mermaid_writer.py
+│   │   ├── meta_writer.py
+│   │   └── llm_prompt_writer.py
 │   └── tests/               # Test suite
-└── models.yaml              # Example configuration
+│       ├── test_cli.py
+│       ├── test_models.py
+│       ├── test_experiments.py
+│       ├── test_writers.py
+│       ├── test_repl.py
+│       └── ...
+├── models.yaml              # Example configuration
+├── formats.yaml             # Example for basic formats
+├── moneta.yaml              # Financial services example
+├── pyproject.toml           # Project metadata and dependencies
+├── requirements.txt         # Python dependencies
+└── Dockerfile               # Docker build configuration
 ```
 
 ## Development
