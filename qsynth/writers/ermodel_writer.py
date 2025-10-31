@@ -2,7 +2,6 @@ from pandas import DataFrame
 
 from qsynth.writers.base import Writer
 from qsynth.writers import register_writer
-from qsynth.main import clean_type_name
 
 
 @register_writer('ermodel')
