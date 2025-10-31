@@ -1,10 +1,10 @@
 experiments:
   write_parquet:
     type : parquet
-    path : "./parquet/{dataset-name}.parquet"
+    path : ".test-data/parquet/{dataset-name}.parquet"
   write_avro:
     type: avro
-    path: "./avro/{dataset-name}.avro"
+    path: ".test-data/avro/{dataset-name}.avro"
 models:
   - name : formats
     locales: ['en-US']
