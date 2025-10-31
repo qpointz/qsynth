@@ -1,14 +1,10 @@
 import argparse
-import os.path
 import sys
-from abc import abstractmethod
 
 import fastavro
 import numpy
-import pandavro
 from croniter import croniter
 from datetime import datetime
-from pandas import DataFrame
 import numbers
 from faker import Faker
 from faker_airtravel import AirTravelProvider
@@ -19,7 +15,10 @@ import yaml
 from pathlib import Path
 from collections import namedtuple
 import pandas as pd
+from pandas import DataFrame
 from qsynth.provider import QsynthProviders
+from qsynth.models import Model, Schema, Attribute, RowSpec
+from typing import List
 import re
 
 def create_faker(**kwargs):
@@ -31,56 +30,7 @@ def create_faker(**kwargs):
     return faker
 
 
-class Writer:
-
-    @abstractmethod
-    def init_writer(self, init_path):
-        print(f"Init writer on {init_path}")
-
-    @abstractmethod
-    def finalize_writer(self):
-        print(f"Finalize writer on")
-
-    @abstractmethod
-    def write(self, path, pd: DataFrame, model_name, schema_name, model, writeparams={}):
-        pass
-
-    @staticmethod
-    def ensure_path(path):
-        if os.path.exists(path):
-            os.remove(path)
-        else:
-            if not os.path.exists(path.parent):
-                os.makedirs(path.parent)
-
-
-class CsvWriter(Writer):
-    def init_writer(self, init_path):
-        print(f"Init CSV writer on {init_path}")
-
-    def write(self, path, pd: DataFrame, model_name, schema_name, model, writeparams={}):
-        Writer.ensure_path(path)
-        pd.to_csv(path, **writeparams)
-
-
-class ParquetWriter(Writer):
-    def init_writer(self, init_path):
-        print(f"Init Parquet writer on {init_path}")
-
-    def write(self, path, pd: DataFrame, model_name, schema_name, model, writeparams={}):
-        Writer.ensure_path(path)
-        pd.to_parquet(path, **writeparams)
-
-class AvroWriter(Writer):
-    def init_writer(self, init_path):
-        print(f"Init Avro writer on {init_path}")
-
-    def write(self, path, pd: DataFrame, model_name, schema_name, model, writeparams={}):
-        Writer.ensure_path(path)
-        pandavro.to_avro(path, pd, **writeparams)
-        m = fastavro.writer()
-
-class SqlWriter(Writer):
+class SqlWriter:
     def __init__(self):
         self.last_path = None
         self.lines = []
@@ -105,12 +55,12 @@ class SqlWriter(Writer):
     def _get_columns_definition(dataset_schema, pd):
         attrs = []
 
-        for tp, x in list(zip(list(pd.dtypes), dataset_schema['attributes'])):
-            attrs.append(f"{x['name']} {SqlWriter.to_sql_type(tp.kind)} NOT NULL\n")
+        for tp, x in list(zip(list(pd.dtypes), dataset_schema.attributes)):
+            attrs.append(f"{x.name} {SqlWriter.to_sql_type(tp.kind)} NOT NULL\n")
         return "\t "+ "\t,".join(attrs)
 
     def _write_insert(self, dataset_schema, pd, row):
-        attrs = ",".join([x['name'] for x in dataset_schema['attributes']])
+        attrs = ",".join([x.name for x in dataset_schema.attributes])
 
         type = [ x.kind for x in list(pd.dtypes)]
         values = list(zip(type, list(row)))
@@ -123,13 +73,13 @@ class SqlWriter(Writer):
                     return str(o)
 
         enc = ",".join([encode(x[0],x[1]) for x in values])
-        return f"INSERT INTO {dataset_schema['name']} ({attrs}) VALUES ({enc});"
+        return f"INSERT INTO {dataset_schema.name} ({attrs}) VALUES ({enc});"
         #list(zip(list(pd.dtypes), dataset_schema['attributes'])):
 
 
     def write(self, path, pd: DataFrame, model_name, schema_name, model, writeparams={}):
         self.last_path = path
-        sc = [schema for schema in model.model['schemas'] if schema['name'] == schema_name]
+        sc = [schema for schema in model.model.schemas if schema.name == schema_name]
         if not sc or len(sc) == 0:
             return
         dataset_schema = sc[0]
@@ -143,6 +93,7 @@ class SqlWriter(Writer):
             self.lines.append(self._write_insert(dataset_schema, pd, row))
 
     def finalize_writer(self):
+        from qsynth.writers.base import Writer
         Writer.ensure_path(self.last_path)
         with open(self.last_path, "w") as tf:
             tf.write("\n".join(self.lines))
@@ -151,7 +102,7 @@ def clean_type_name(s):
     typec = r"\([^)]+\)"
     return re.sub(typec, '', str(s).lower())
 
-class MetaDescriptorWriter(Writer):
+class MetaDescriptorWriter:
     def __init__(self):
         self.last_path = None
         self.write_params={}
@@ -166,10 +117,10 @@ class MetaDescriptorWriter(Writer):
         self.last_path = path
         self.model_name = model_name
         self.write_params.update(writeparams)
-        sc = [schema for schema in model.model['schemas'] if schema['name'] == schema_name][0]
-        names = [x['name'] for x in sc['attributes']]
+        sc = [schema for schema in model.model.schemas if schema.name == schema_name][0]
+        names = [x.name for x in sc.attributes]
         types = [SqlWriter.to_sql_type(x.kind) for x in list(pd.dtypes)]
-        descriptions = [x.get('description') for x in sc['attributes']]
+        descriptions = [x.description for x in sc.attributes]
         a = list(zip(names, types, descriptions))
         attrs = []
         for o in a:
@@ -177,19 +128,21 @@ class MetaDescriptorWriter(Writer):
             attrs.append(da)
         self.tables.append({"name":schema_name, "attributes" : attrs})
 
-        for at in sc['attributes']:
-            if at['type']=="${ref}":
-                self.refs.append({"parent": {"table" : at['params']['dataset'], "attribute" :at['params']['attribute'] }, 'child': {"table" : schema_name, 'attribute': at['name']}, "cardinality" : at['params'].get('cord', "1-*")})
+        for at in sc.attributes:
+            if at.type == "${ref}":
+                if at.params and at.params.dataset and at.params.attribute:
+                    self.refs.append({"parent": {"table" : at.params.dataset, "attribute" : at.params.attribute }, 'child': {"table" : schema_name, 'attribute': at.name}, "cardinality" : (at.params.cord or "1-*")})
 
 
     def finalize_writer(self):
+        from qsynth.writers.base import Writer
         Writer.ensure_path(self.last_path)
         fm = {"schemas" : [{"name": self.model_name, "tables": self.tables, "references": self.refs}] }
         with (open(self.last_path, "w") as tf):
             yaml.dump(fm, tf, default_flow_style=False, sort_keys=False)
 
 
-class LLMPromptWriter(Writer):
+class LLMPromptWriter:
     def __init__(self):
         self.last_path = None
         self.refs = []
@@ -203,19 +156,21 @@ class LLMPromptWriter(Writer):
     def write(self, path, pd: DataFrame, model_name, schema_name, model, writeparams={}):
         self.last_path = path
         self.write_params.update(writeparams)
-        sc = [schema for schema in model.model['schemas'] if schema['name'] == schema_name][0]
-        names = [x['name'] for x in sc['attributes']]
+        sc = [schema for schema in model.model.schemas if schema.name == schema_name][0]
+        names = [x.name for x in sc.attributes]
         types = [SqlWriter.to_sql_type(x.kind) for x in list(pd.dtypes)]
-        descriptions = [x.get('description') for x in sc['attributes']]
+        descriptions = [x.description for x in sc.attributes]
         a = list(zip(names, types, descriptions))
-        for at in sc['attributes']:
-             if at['type']=="${ref}":
-                 self.refs.append({'p': at['params']['dataset'], 'pa':at['params']['attribute'],'c' : schema_name, 'ca': at['name'], 'cord': at['params'].get('cord', "1-*")})
+        for at in sc.attributes:
+             if at.type == "${ref}":
+                 if at.params and at.params.dataset and at.params.attribute:
+                     self.refs.append({'p': at.params.dataset, 'pa': at.params.attribute,'c' : schema_name, 'ca': at.name, 'cord': (at.params.cord or "1-*")})
         self.models.update({schema_name:a})
-        self.table_descriptions.update({schema_name: sc.get('description')})
-        print(a)
+        self.table_descriptions.update({schema_name: sc.description})
+        # removed debug print
 
     def finalize_writer(self):
+        from qsynth.writers.base import Writer
         Writer.ensure_path(self.last_path)
         with (open(self.last_path, "w") as tf):
             prolog = self.write_params.get('prologue')
@@ -258,7 +213,7 @@ class LLMPromptWriter(Writer):
 
             tf.close()
 
-class ErMermaidModelWriter(Writer):
+class ErMermaidModelWriter:
 
     def __init__(self):
         self.last_path = None
@@ -270,18 +225,20 @@ class ErMermaidModelWriter(Writer):
 
     def write(self, path, pd: DataFrame, model_name, schema_name, model, writeparams={}):
         self.last_path = path
-        sc = [schema for schema in model.model['schemas'] if schema['name'] == schema_name][0]
-        names = [x['name'] for x in sc['attributes']]
+        sc = [schema for schema in model.model.schemas if schema.name == schema_name][0]
+        names = [x.name for x in sc.attributes]
         types = [SqlWriter.to_sql_type(x.kind) for x in list(pd.dtypes)]
         a = list(zip(names, types))
-        for at in sc['attributes']:
-            if at['type']=="${ref}":
-                self.refs.append({'p': at['params']['dataset'], 'pa':at['params']['attribute'],'c' : schema_name, 'ca': at['name'], 'cord': at['params'].get('cord', "1-*")})
+        for at in sc.attributes:
+            if at.type=="${ref}":
+                if at.params and at.params.dataset and at.params.attribute:
+                    self.refs.append({'p': at.params.dataset, 'pa': at.params.attribute,'c' : schema_name, 'ca': at.name, 'cord': (at.params.cord or "1-*")})
         self.models.update({schema_name:a})
-        print(a)
+        # removed debug print
 
     def finalize_writer(self):
 
+        from qsynth.writers.base import Writer
         Writer.ensure_path(self.last_path)
         with (open(self.last_path, "w") as tf):
             tf.write("erDiagram\n")
@@ -299,7 +256,7 @@ class ErMermaidModelWriter(Writer):
                 tf.write(' '+r['c']+':has\n')
             tf.close()
 
-class ErModelWriter(Writer):
+class ErModelWriter:
 
     def __init__(self):
         self.last_path = None
@@ -311,17 +268,19 @@ class ErModelWriter(Writer):
 
     def write(self, path, pd: DataFrame, model_name, schema_name, model, writeparams={}):
         self.last_path = path
-        sc = [schema for schema in model.model['schemas'] if schema['name'] == schema_name][0]
-        names = [x['name'] for x in sc['attributes']]
+        sc = [schema for schema in model.model.schemas if schema.name == schema_name][0]
+        names = [x.name for x in sc.attributes]
         types = [SqlWriter.to_sql_type(x.kind) for x in list(pd.dtypes)]
         a = list(zip(names, types))
-        for at in sc['attributes']:
-            if at['type']=="${ref}":
-                self.refs.append({'p': at['params']['dataset'], 'pa':at['params']['attribute'],'c' : schema_name, 'ca': at['name'], 'cord': at['params'].get('cord', "1-*")})
+        for at in sc.attributes:
+            if at.type == "${ref}":
+                if at.params and at.params.dataset and at.params.attribute:
+                    self.refs.append({'p': at.params.dataset, 'pa': at.params.attribute,'c' : schema_name, 'ca': at.name, 'cord': (at.params.cord or "1-*")})
         self.models.update({schema_name:a})
-        print(a)
+        # removed debug print
 
     def finalize_writer(self):
+        from qsynth.writers.base import Writer
         Writer.ensure_path(self.last_path)
         with (open(self.last_path, "w") as tf):
             tf.write("@startuml\n")
@@ -344,17 +303,9 @@ class ErModelWriter(Writer):
 
 
 
-def get_writer(name) -> Writer:
-    if name == 'csv':
-        return CsvWriter()
-
-    if name == 'parquet':
-        return ParquetWriter()
-
-    if name == 'avro':
-        return AvroWriter()
-
-    raise Exception(f"Unknown writer '{name}'")
+def get_writer(name):
+    from qsynth.writers import get_writer as _gw
+    return _gw(name)
 
 
 AttributeG = namedtuple("AttributeG", "key gen params")
@@ -365,43 +316,38 @@ class MultiModelsFaker:
     def __init__(self, models):
         self.models = {}
         for m in models:
-            name = m['name']
-            self.models.update({name: MultiModelsFaker.ModelFaker(m)})
-        pass
+            # Parse dict to Pydantic model
+            model_obj = Model(**m) if isinstance(m, dict) else m
+            self.models.update({model_obj.name: MultiModelsFaker.ModelFaker(model_obj)})
 
     def explain(self):
         print(self.models)
-        pass
 
     def generate_all(self):
         for k, m in self.models.items():
             m.generate()
 
     class ModelFaker:
-        def __init__(self, model):
-            if 'locales' not in model:
-                model.update({'locales': 'en-US'})
-            locales = model['locales']
-            if 'rows' not in model:
-                model.update({'rows': {'min': 1, 'max': 100}})
-            if 'schemas' not in model:
-                model.update({'schemas', []})
-            self.model = model
+        def __init__(self, model: Model):
+            self.model: Model = model
             self.generated = {}
 
         def generate(self):
             self.generated = {}
-            faker = create_faker(locale=self.model['locales'])
-            for schema in self.model['schemas']:
+            locale = self.model.locales if isinstance(self.model.locales, str) else self.model.locales[0]
+            faker = create_faker(locale=locale)
+            for schema in self.model.schemas:
                 r = self.__generate_schema(faker, schema)
-                key = schema['name']
+                key = schema.name
                 self.generated.update({key: r})
 
-        def __resolve_gen(self, f, c):
-            gn = c['type']
+        def __resolve_gen(self, f, attr: Attribute):
+            gn = attr.type
             if gn == "${ref}":
-                ds = c['params']['dataset']
-                col = c['params']['attribute']
+                if not attr.params or not attr.params.dataset or not attr.params.attribute:
+                    raise ValueError(f"${ref} type requires params.dataset and params.attribute")
+                ds = attr.params.dataset
+                col = attr.params.attribute
                 pd = self.generated[ds]
 
                 def g(*args, **kwargs):
@@ -412,176 +358,67 @@ class MultiModelsFaker:
                 g = getattr(f, gn)
                 return g
             else:
-                raise Exception(f"Unknown generator {gn}")
+                raise ValueError(f"Unknown generator {gn}")
 
-        def __generate_schema(self, fake, schema):
+        def __generate_schema(self, fake, schema: Schema):
             gens = []
-            for col in schema['attributes']:
-                if 'params' not in col:
-                    params = {}
-                else:
-                    params = col['params']
-                gens.append(AttributeG(col['name'], self.__resolve_gen(fake, col), params))
+            for attr in schema.attributes:
+                params_dict = attr.params.model_dump() if attr.params else {}
+                # Remove None values
+                params_dict = {k: v for k, v in params_dict.items() if v is not None}
+                gens.append(AttributeG(attr.name, self.__resolve_gen(fake, attr), params_dict))
+            
             headers = [g.key for g in gens]
             rows = []
 
-            rowobj = schema['rows']
+            # Handle row count specification
+            rowobj = schema.rows
             rowstogen = 0
-            if isinstance(rowobj, numbers.Number):
+            if isinstance(rowobj, int):
                 rowstogen = rowobj
+            elif isinstance(rowobj, RowSpec):
+                rowstogen = fake.random.randint(rowobj.min, rowobj.max)
             else:
-                if type(rowobj) is dict:
-                    minrows = 0
-                    maxrows = 0
-                    if 'min' not in rowobj:
-                        minrows = 0
-                    else:
-                        minrows = int(rowobj['min'])
-                    if 'max' not in rowobj:
-                        maxrows = 10000
-                    else:
-                        maxrows = int(rowobj['max'])
-                    rowstogen = fake.random.randint(minrows, maxrows)
-                else:
-                    raise Exception("rows spec not supported")
+                raise ValueError(f"Unsupported row spec type: {type(rowobj)}")
 
             for index in range(1, rowstogen + 1):
                 row = [g.gen(**g.params) for g in gens]
                 rows.append(row)
+
+            # Build DataFrame and enforce dtypes when rows exist
+            df = pd.DataFrame(rows, columns=headers)
+            if len(rows) == 0:
+                return df
 
             dts = [numpy.array(x).dtype.name for x in rows[0]]
             pts = [numpy.dtype(type(x)) for x in rows[0]]
             d = {}
             for h, t, v in zip(headers, dts, pts):
                 if str(t).startswith("str"):
-                    d.update({h:"str"})
+                    d.update({h: "str"})
                 else:
-                    d.update({h:t})
+                    d.update({h: t})
 
-            df = pd.DataFrame(rows, columns=headers)
-            df.astype(dtype=d)
+            df = df.astype(dtype=d)
             return df
 
 
 def from_model_file(p):
     with open(p, 'r') as yamlstream:
         mp = yaml.safe_load(yamlstream)
-        return MultiModelsFaker(mp['models'])
+        models = [Model(**m) for m in mp['models']]
+        return MultiModelsFaker(models)
 
 
-class Experiment:
-    pass
-
-
-class CronFeedExperiment(Experiment):
-    def __init__(self, p, models, relative_to):
-        self.models = models
-        self.relative_to = relative_to
-        self.p = p
-
-    def run(self):
-        datesp = self.p['dates']
-        from_date = datetime.now()
-        to_date = datetime.max
-        count = sys.maxsize
-        if 'to' not in datesp and 'count' not in datesp:
-            raise Exception("One of parameters 'to' or 'count' must be present")
-
-        if 'from' in datesp:
-            from_date = datetime.strptime(datesp['from'], '%Y-%m-%d')
-        if 'to' in datesp:
-            to_date = datetime.strptime(datesp['to'], '%Y-%m-%d')
-        if 'count' in datesp:
-            count = datesp['count']
-        if from_date >= to_date:
-            raise Exception("'from_date' can't be greater as 'to_date'")
-
-        i = 0
-        iter = croniter(self.p['cron'], from_date)
-        cur_date = from_date
-        path_template = Path(self.relative_to) / str(self.p['path'])
-        writer = get_writer(self.p['writer']['name'])
-        if 'params' in self.p['writer']:
-            writeparams = self.p['writer']['params']
-        else:
-            writeparams = {}
-        while i < count and cur_date <= to_date:
-            cur_date = iter.next(datetime)
-            print(cur_date)
-            mmf = MultiModelsFaker(self.models)
-            mmf.generate_all()
-            for mn, m in mmf.models.items():
-                for gn, g in m.generated.items():
-                    p = {'model-name': mn, 'dataset-name': gn, 'cron-date': cur_date}
-                    ap = Path(str(path_template).format(**p)).absolute()
-                    writer.write(ap, g, mn, gn, m, writeparams)
-
-class WriteExperiment:
-    def __init__(self, p, models, relative_to):
-        self.path = p['path']
-        self.models = models
-        self.relative_to = relative_to
-        if 'params' not in p:
-            self.writeParams = {}
-        else:
-            self.writeParams = p['params']
-
-    def run(self):
-        mmf = MultiModelsFaker(self.models)
-        mmf.generate_all()
-        w = self.writer()
-        init_path = (Path(self.relative_to) / str(self.path)).absolute()
-        w.init_writer(init_path)
-
-        for mn, m in mmf.models.items():
-            for gn, g in m.generated.items():
-                p = {'model-name': mn, 'dataset-name': gn}
-                ap = (Path(self.relative_to) / str(self.path).format(**p)).absolute()
-                w.write(ap, g, mn, gn, m, self.writeParams)
-        w.finalize_writer()
-
-
-    def writer(self) -> Writer:
-        pass
-
-
-class CsvWriteExperiment(WriteExperiment):
-    def writer(self) -> Writer:
-        return CsvWriter()
-
-
-class ParquetWriteExperiment(WriteExperiment):
-    def writer(self) -> Writer:
-        return ParquetWriter()
-
-class AvroWriteExperiment(WriteExperiment):
-    def writer(self) -> Writer:
-        return AvroWriter()
-
-class SqlWriteExperiment(WriteExperiment):
-    def writer(self) -> Writer:
-        return SqlWriter()
-
-class ErModelWriteExperiment(WriteExperiment):
-    def writer(self) -> Writer:
-        return ErModelWriter()
-
-class ErMermaidModelWriteExperiment(WriteExperiment):
-    def writer(self) -> Writer:
-        return ErMermaidModelWriter()
-
-class LLMPromptWriteExperiment(WriteExperiment):
-    def writer(self) -> Writer:
-        return LLMPromptWriter()
-
-class MetaDescriptorExperiment(WriteExperiment):
-    def writer(self) -> Writer:
-        return MetaDescriptorWriter()
+# Experiment classes moved to qsynth.experiments package
+# Imported dynamically via registry in Experiments.run()
 
 
 class Experiments:
+    """Manager for running multiple experiments."""
+    
     def __init__(self, exps, models, relative_to=None):
-        self.models = models
+        self.models: List[Model] = models
         self.exps = exps
         if relative_to:
             self.relative_to = Path(relative_to).parent
@@ -589,51 +426,33 @@ class Experiments:
             self.relative_to = Path(__file__).parent
 
     def run_all(self):
-        for k, v in self.exps.items():
-            self.run(k)
+        """Run all configured experiments."""
+        for name in self.exps.keys():
+            self.run(name)
 
     def run(self, name):
-        e = self.exps[name]
-
-        def get_by_type():
-            if 'type' not in e:
-                raise Exception(f"Experiment {name} type is missing")
-            et = e['type']
-            if et == 'csv':
-                return CsvWriteExperiment(e, self.models, self.relative_to)
-                pass
-            if et == 'parquet':
-                return ParquetWriteExperiment(e, self.models, self.relative_to)
-                pass
-            if et == 'avro':
-                return AvroWriteExperiment(e, self.models, self.relative_to)
-                pass
-            if et == 'cron_feed':
-                return CronFeedExperiment(e, self.models, self.relative_to)
-                pass
-            if et == 'sql':
-                return SqlWriteExperiment(e, self.models, self.relative_to)
-                pass
-            if et == 'ermodel' or et=='plantuml':
-                return ErModelWriteExperiment(e, self.models, self.relative_to)
-            if et == 'mermaid':
-                return ErMermaidModelWriteExperiment(e, self.models, self.relative_to)
-            if et == 'llm-prompt':
-                return LLMPromptWriteExperiment(e, self.models, self.relative_to)
-            if et == 'meta':
-                return MetaDescriptorExperiment(e, self.models, self.relative_to)
-
-
-            raise Exception(f"Unknown experiment type {et}")
-
-        inst = get_by_type()
-        inst.run()
+        """Run a single experiment by name."""
+        experiment_config = self.exps[name]
+        
+        if 'type' not in experiment_config:
+            raise ValueError(f"Experiment '{name}' is missing required 'type' field")
+        
+        experiment_type = experiment_config['type']
+        
+        # Use registry to get experiment class
+        from qsynth.experiments import get_experiment_class
+        experiment_class = get_experiment_class(experiment_type)
+        
+        # Create and run experiment
+        experiment = experiment_class(experiment_config, self.models, self.relative_to)
+        experiment.run()
 
 
 def load(p):
     with open(p, 'r') as yamlstream:
         mp = yaml.safe_load(yamlstream)
-        return Experiments(mp['experiments'], mp['models'], relative_to=p)
+        models = [Model(**m) for m in mp['models']]
+        return Experiments(mp['experiments'], models, relative_to=p)
 
 
 def run_experiments(path, *args):
@@ -687,7 +506,7 @@ def exec_types(args):
 def exec_run(args):
     if args.run_all_experiments:
         run_all_experiments(args.input_file)
-    elif len(args.experiment) > 0:
+    elif args.experiment:
         run_experiments(args.input_file, *args.experiment)
 
 

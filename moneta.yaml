@@ -1,29 +1,29 @@
 experiments:
   write_csv:
     type : csv
-    path : "../.test-data/{model-name}/csv/{dataset-name}.csv"
+    path : ".test-data/{model-name}/csv/{dataset-name}.csv"
     params:
       sep : ";"
       header : true
       index: false
   write_parquet:
     type: parquet
-    path: "../.test-data/{model-name}/parquet/{dataset-name}.parquet"
+    path: ".test-data/{model-name}/parquet/{dataset-name}.parquet"
   write_sql:
     type: sql
-    path: "../.test-data/{model-name}/{model-name}.sql"
+    path: ".test-data/{model-name}/{model-name}.sql"
   write_model:
     type: ermodel
-    path: "../.test-data/{model-name}.puml"
+    path: ".test-data/{model-name}.puml"
   write_model_mermaid:
     type: mermaid
-    path: "../.test-data/{model-name}/{model-name}.mmd"
+    path: ".test-data/{model-name}/{model-name}.mmd"
   write_meta:
     type: meta
-    path: "../.test-data/{model-name}/{model-name}-meta.yaml"
+    path: ".test-data/{model-name}/{model-name}-meta.yaml"
   write_model_prompt:
     type: llm-prompt
-    path: "../.test-data/{model-name}/{model-name}.prompt"
+    path: ".test-data/{model-name}/{model-name}.prompt"
     params:
       prologue: You are SQL bot
       rules:

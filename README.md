@@ -1,96 +1,544 @@
 # Qsynth
 
+**Qsynth** is a synthetic data generation tool that creates realistic, relational datasets from declarative YAML models. It generates data in multiple formats (CSV, Parquet, Avro, SQL) and produces documentation artifacts like ER diagrams, metadata descriptors, and LLM prompts.
 
+## Table of Contents
 
-## Getting started
+- [Overview](#overview)
+  - [Key Features](#key-features)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [CLI Usage](#cli-usage)
+  - [List Available Faker Providers](#list-available-faker-providers)
+  - [Run Experiments](#run-experiments)
+  - [Using Docker](#using-docker)
+- [Model File Format](#model-file-format)
+  - [Basic Structure](#basic-structure)
+  - [Model Definition](#model-definition)
+  - [Schema (Table/Dataset)](#schema-tabledataset)
+  - [Attributes (Columns)](#attributes-columns)
+  - [Row Count Specifications](#row-count-specifications)
+- [Experiments](#experiments)
+  - [CSV Experiment](#csv-experiment)
+  - [Parquet Experiment](#parquet-experiment)
+  - [Avro Experiment](#avro-experiment)
+  - [SQL Experiment](#sql-experiment)
+  - [ER Model Experiment](#er-model-experiment)
+  - [Mermaid Experiment](#mermaid-experiment)
+  - [Metadata Descriptor](#metadata-descriptor)
+  - [LLM Prompt](#llm-prompt)
+  - [Cron Feed Experiment](#cron-feed-experiment)
+- [Examples](#examples)
+- [Project Structure](#project-structure)
+- [Development](#development)
+  - [Running Tests](#running-tests)
+  - [Adding Custom Experiments](#adding-custom-experiments)
+  - [Adding Custom Writers](#adding-custom-writers)
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+## Overview
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+Qsynth solves the problem of creating realistic test data with proper relational integrity. Instead of manually crafting CSV files or SQL inserts, you define your data model in YAML and Qsynth generates:
 
-## Add your files
+- **Synthetic datasets** with realistic-looking values (names, addresses, emails, etc.)
+- **Referential integrity** between related entities using `${ref}` references
+- **Multiple output formats** for different use cases (analytics, databases, documentation)
+- **Time-based feeds** using cron schedules for simulating historical data streams
 
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/ee/gitlab-basics/add-file.html#add-a-file-using-the-command-line) or push an existing Git repository with the following command:
+### Key Features
 
-```
-cd existing_repo
-git remote add origin https://gitlab.qpointz.io/qpointz/qsynth.git
-git branch -M main
-git push -uf origin main
-```
-
-## Integrate with your tools
-
-- [ ] [Set up project integrations](https://gitlab.qpointz.io/qpointz/qsynth/-/settings/integrations)
-
-## Collaborate with your team
-
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Set auto-merge](https://docs.gitlab.com/ee/user/project/merge_requests/merge_when_pipeline_succeeds.html)
-
-## Test and Deploy
-
-Use the built-in continuous integration in GitLab.
-
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/index.html)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
-
-***
-
-# Editing this README
-
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
-
-## Suggestions for a good README
-
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
-
-## Name
-Choose a self-explaining name for your project.
-
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
-
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
-
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+- 🎲 **Rich Data Types**: Built on [Faker](https://github.com/joke2k/faker) with extensions for financial, aviation, vehicle data
+- 🔗 **Relationship Modeling**: Define foreign keys and cardinalities declaratively
+- 📊 **Multiple Outputs**: CSV, Parquet, Avro, SQL DDL, ER diagrams, metadata YAML, LLM prompts
+- ⏰ **Cron Schedules**: Generate time-series data with configurable date ranges
+- 🔧 **Extensible**: Easy to add new experiment types and writer formats
+- ✅ **Type-Safe**: Pydantic validation ensures your models are well-formed
 
 ## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+```bash
+pip install -e .
+```
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+Or using Docker:
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+```bash
+docker build -t qsynth .
+```
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+## Quick Start
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+1. **Define your model** in a YAML file:
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+```yaml
+models:
+  - name: ecommerce
+    locales: ['en-US']
+    schemas:
+      - name: customers
+        rows: 100
+        attributes:
+          - name: customer_id
+            type: random_int
+            params:
+              min: 1000
+              max: 9999
+          - name: email
+            type: email
+          - name: first_name
+            type: first_name
+      
+      - name: orders
+        rows: 200
+        attributes:
+          - name: order_id
+            type: random_int
+          - name: customer_id
+            type: ${ref}
+            params:
+              dataset: customers
+              attribute: customer_id
+              cord: 1-*  # one-to-many
+          - name: total
+            type: random_double
+```
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+2. **Configure experiments** for output formats:
+
+```yaml
+experiments:
+  write_csv:
+    type: csv
+    path: "./data/{model-name}/csv/{dataset-name}.csv"
+    params:
+      sep: ";"
+      header: true
+      index: false
+```
+
+3. **Run the generation**:
+
+```bash
+python -m qsynth run --input-file model.yaml --run-all-experiments
+```
+
+## CLI Usage
+
+Qsynth provides a simple command-line interface:
+
+### List Available Faker Providers
+
+```bash
+python -m qsynth types --all
+```
+
+Search for specific providers:
+
+```bash
+python -m qsynth types --find random
+```
+
+### Run Experiments
+
+Run all experiments defined in a YAML file:
+
+```bash
+python -m qsynth run --input-file model.yaml --run-all-experiments
+```
+
+Or run specific experiments:
+
+```bash
+python -m qsynth run --input-file model.yaml --experiment write_csv write_parquet
+```
+
+### Using Docker
+
+```bash
+docker run -v "$(pwd):/data" qsynth run --input-file /data/model.yaml --run-all-experiments
+```
+
+## Model File Format
+
+### Basic Structure
+
+Every Qsynth configuration file has two main sections:
+
+```yaml
+experiments:
+  # Output format configurations
+
+models:
+  # Data model definitions
+```
+
+### Model Definition
+
+A **model** is a collection of related **schemas** (tables/datasets):
+
+```yaml
+- name: mymodel          # Model name
+  locales: ['en-US']     # Locale for generating data
+  schemas:               # List of schemas
+    - name: dataset1
+      rows: 100          # Number of rows
+      attributes: [...]  # Columns
+```
+
+### Schema (Table/Dataset)
+
+A **schema** defines a single dataset with its columns:
+
+```yaml
+- name: customers
+  rows: 100              # Exact count OR {min: 10, max: 100}
+  description: Customer master data
+  attributes:
+    - name: id
+      type: random_int
+      params:
+        min: 1
+        max: 1000
+      description: Primary key
+```
+
+### Attributes (Columns)
+
+Each attribute specifies:
+- **name**: Column name
+- **type**: Faker provider method or `${ref}` for foreign keys
+- **params**: Parameters for the generator
+- **description**: Optional documentation
+
+#### Built-in Faker Types
+
+Common types from Faker:
+
+- `random_int` - Random integer (params: `min`, `max`)
+- `random_double` - Random float (params: `min`, `max`)
+- `random_element` - Random choice (params: `elements` list)
+- `first_name`, `last_name`, `name` - Person names
+- `email`, `phone_number` - Contact info
+- `address`, `city`, `country` - Location data
+- `date_this_year`, `date_this_decade` - Dates
+- `sentence`, `text` - Text content
+- `job`, `company` - Business data
+
+And many more (see `python -m qsynth types --all`)
+
+#### Reference Types (`${ref}`)
+
+Reference to another dataset's column:
+
+```yaml
+- name: customer_id
+  type: ${ref}
+  params:
+    dataset: customers      # Target dataset name
+    attribute: customer_id  # Target column
+    cord: 1-*              # Cardinality (optional, default: "1-*")
+```
+
+Cardinality options:
+- `1-*`: One-to-many (each parent can have multiple children)
+- `*-*`: Many-to-many
+- `1-1`: One-to-one
+
+### Row Count Specifications
+
+Exact count:
+```yaml
+rows: 100
+```
+
+Range:
+```yaml
+rows:
+  min: 10
+  max: 100
+```
+
+## Experiments
+
+Experiments define **what to generate** and **where to write it**. Each experiment has a `type` and configuration.
+
+### CSV Experiment
+
+Generate CSV files:
+
+```yaml
+write_csv:
+  type: csv
+  path: "./data/{dataset-name}.csv"
+  params:
+    sep: ";"
+    header: true
+    index: false
+```
+
+Path templates support:
+- `{model-name}` - Model name
+- `{dataset-name}` - Schema/dataset name
+
+### Parquet Experiment
+
+Generate Apache Parquet files (columnar format):
+
+```yaml
+write_parquet:
+  type: parquet
+  path: "./data/parquet/{model-name}/{dataset-name}.parquet"
+```
+
+### Avro Experiment
+
+Generate Apache Avro files:
+
+```yaml
+write_avro:
+  type: avro
+  path: "./data/avro/{dataset-name}.avro"
+```
+
+### SQL Experiment
+
+Generate SQL DDL and INSERT statements:
+
+```yaml
+write_sql:
+  type: sql
+  path: "./data/{model-name}.sql"
+```
+
+Outputs:
+- `CREATE TABLE` statements with column definitions
+- `INSERT` statements with all rows
+
+### ER Model Experiment
+
+Generate PlantUML ER diagram:
+
+```yaml
+write_model:
+  type: ermodel  # or 'plantuml'
+  path: "./data/{model-name}.puml"
+```
+
+### Mermaid Experiment
+
+Generate Mermaid ER diagram:
+
+```yaml
+write_mermaid:
+  type: mermaid
+  path: "./data/{model-name}.mmd"
+```
+
+### Metadata Descriptor
+
+Generate YAML metadata about tables and relationships:
+
+```yaml
+write_meta:
+  type: meta
+  path: "./data/{model-name}-meta.yaml"
+```
+
+### LLM Prompt
+
+Generate prompt text for LLM SQL assistance:
+
+```yaml
+write_prompt:
+  type: llm-prompt
+  path: "./data/{model-name}.prompt"
+  params:
+    prologue: "You are a SQL assistant"
+    rules:
+      - "Use JOIN when needed"
+      - "Quote identifiers with backticks"
+    epilogue: "Always return JSON with query and confidence"
+```
+
+### Cron Feed Experiment
+
+Generate time-series files based on a cron schedule:
+
+```yaml
+cron_feed:
+  type: cron_feed
+  cron: 0 18 * * MON-FRI        # Every weekday at 6 PM
+  dates:
+    from: '2023-01-01'
+    to: '2023-12-31'
+    count: 100                   # OR use 'count' instead of 'to'
+  path: "./data/feed/{dataset-name}-{cron-date:%Y-%m-%d}.csv"
+  writer:
+    name: csv
+    params:
+      sep: ";"
+      header: true
+      index: false
+```
+
+This generates files for each occurrence of the cron pattern between dates.
+
+## Using as a Library
+
+Qsynth can be used programmatically in your Python applications:
+
+```python
+from qsynth import Model, Schema, Attribute, Experiments
+
+# Define your data model
+model = Model(
+    name="products",
+    locales="en-US",
+    schemas=[
+        Schema(
+            name="items",
+            rows=100,
+            attributes=[
+                Attribute(name="id", type="random_int", params={"min": 1, "max": 10000}),
+                Attribute(name="name", type="company"),
+                Attribute(name="price", type="random_double", params={"min": 10.0, "max": 1000.0}),
+            ]
+        )
+    ]
+)
+
+# Configure output experiments
+experiments_config = {
+    'write_csv': {
+        'type': 'csv',
+        'path': './output/{dataset-name}.csv',
+        'params': {'index': False}
+    }
+}
+
+# Run generation
+experiments = Experiments(experiments_config, [model])
+experiments.run_all()
+```
+
+### Direct Data Generation
+
+Generate DataFrames without writing to files:
+
+```python
+from qsynth import Model, Schema, Attribute, MultiModelsFaker
+
+model = Model(
+    name="test",
+    locales="en-US",
+    schemas=[
+        Schema(
+            name="users",
+            rows=50,
+            attributes=[
+                Attribute(name="id", type="random_int"),
+                Attribute(name="email", type="email"),
+                Attribute(name="name", type="first_name"),
+            ]
+        )
+    ]
+)
+
+# Generate data in memory
+mmf = MultiModelsFaker([model])
+mmf.generate_all()
+
+# Access generated DataFrames
+users_df = mmf.models["test"].generated["users"]
+print(f"Generated {len(users_df)} users")
+```
+
+## Examples
+
+See the included example files:
+
+- `formats.yaml` - Basic CSV/Parquet/Avro generation
+- `models.yaml` - Complex model with references and cron feed
+- `moneta.yaml` - Financial services domain model
+
+## Project Structure
+
+```
+qsynth/
+├── qsynth/
+│   ├── __init__.py
+│   ├── main.py              # Core generation logic
+│   ├── cli.py               # Command-line interface
+│   ├── models.py            # Pydantic model definitions
+│   ├── provider.py          # Custom Faker providers
+│   ├── experiments/         # Experiment types
+│   │   ├── csv_experiment.py
+│   │   ├── parquet_experiment.py
+│   │   ├── sql_experiment.py
+│   │   └── ...
+│   ├── writers/             # Output writers
+│   │   ├── csv_writer.py
+│   │   ├── parquet_writer.py
+│   │   └── ...
+│   └── tests/               # Test suite
+└── models.yaml              # Example configuration
+```
+
+## Development
+
+### Running Tests
+
+```bash
+pytest
+```
+
+Tests generate outputs in `.test-data/.ut/` directory.
+
+### Adding Custom Experiments
+
+1. Create a new file in `qsynth/experiments/`:
+
+```python
+from qsynth.experiments.write_experiment import WriteExperiment
+from qsynth.experiments import register_experiment
+from qsynth.writers.your_writer import YourWriter
+
+@register_experiment('your-type')
+class YourExperiment(WriteExperiment):
+    def get_writer(self):
+        return YourWriter()
+```
+
+2. Register the writer in `qsynth/writers/__init__.py`
+
+### Adding Custom Writers
+
+1. Create a file in `qsynth/writers/`:
+
+```python
+from qsynth.writers.base import Writer
+from qsynth.writers import register_writer
+
+@register_writer('your-format')
+class YourWriter(Writer):
+    def write(self, path, pd, model_name, schema_name, model, writeparams={}):
+        # Your implementation
+        pass
+```
 
 ## License
-For open source projects, say how it is licensed.
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+[Your License Here]
 
-## To run 
+## Contributing
+
+Contributions welcome! Please ensure all tests pass before submitting.
+
+```bash
+pytest
+```
+
+## To run using docker 
+
+```bash
 docker run -v "$(pwd):/data" qsynth run --input-file formats.yaml --run-all-experiments
+```

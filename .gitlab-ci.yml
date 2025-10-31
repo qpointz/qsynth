@@ -1,5 +1,25 @@
 stages:
+  - test
   - package
+
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+
+cache:
+  paths:
+    - .cache/pip
+    - venv/
+
+test:
+  stage: test
+  image: python:3.11-slim
+  before_script:
+    - python -m venv venv
+    - source venv/bin/activate
+    - pip install --upgrade pip
+    - pip install -e .
+  script:
+    - pytest -v  
 
 .docker-build-job:
   image:
@@ -26,3 +46,5 @@ qsynth:grpc-service-publish-docker:
       --cache-dir "${CI_KANIKO_CACHE_DIR}/qsynth"            
       --destination="qpointz/qsynth:${TAG_VERSION}"
       --cache=true
+  needs:
+    - test

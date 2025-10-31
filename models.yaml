@@ -1,26 +1,26 @@
 experiments:
   write_csv:
     type : csv
-    path : "../.test-data/csv/{model-name}/{dataset-name}.csv"
+    path : ".test-data/csv/{model-name}/{dataset-name}.csv"
     params:
       sep : ";"
       header : true
       index: false
   write_parquet:
     type: parquet
-    path: "../.test-data/parquet/{model-name}/{dataset-name}.parquet"
+    path: ".test-data/parquet/{model-name}/{dataset-name}.parquet"
   write_sql:
     type: sql
-    path: "../.test-data/parquet/{model-name}/{dataset-name}.sql"
+    path: ".test-data/parquet/{model-name}/{dataset-name}.sql"
   write_model:
     type: ermodel
-    path: "../.test-data/{model-name}.puml"
+    path: ".test-data/{model-name}.puml"
   write_model_mermaid:
     type: mermaid
-    path: "../.test-data/{model-name}.mmd"
+    path: ".test-data/{model-name}.mmd"
   write_model_prompt:
     type: llm-prompt
-    path: "../.test-data/{model-name}.prompt"
+    path: ".test-data/{model-name}.prompt"
     params:
       prologue: You are SQL bot
       rules:
@@ -48,7 +48,7 @@ experiments:
       from : '2023-01-01'
       to : '2023-05-01'
       count : 30
-    path: "../.test-data/feed/{dataset-name}-daily-{cron-date:%Y-%m-%d}.csv"
+    path: ".test-data/feed/{dataset-name}-daily-{cron-date:%Y-%m-%d}.csv"
     writer:
       name : csv
       params:
